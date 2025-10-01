@@ -1,0 +1,3164 @@
+$LEGEND
+
+# - single byte
+## - double byte
+#~, ##~ - z380: may fetch extra bytes
+
+opnd(A/B) - uses opnd(B) for z280, opnd(A) for others
+
+$ARCHITECTURES
+
+dp22	-	Datapoint 2200	// 1970, CTC Datapoint 2200 Version I
+dp22v2	dp22	Datapoint 2200 Version II	// 1972, CTC Datapoint 2200 Version II
+i8	dp22	Intel 8008	// 1972
+i8i80	-	-
+i80	i8i80	Intel 8080	// 1974
+v20	i80	NEC V20	// 1982, NEC V20 8080 Emulation Mode
+i85	i80	Intel 8085, Tundra CA80C85B	// 1976
+vm1	i80	КР580ВМ1 (KR580VM1)	// 1989
+z80	~i80	Zilog Z80	// 1976
+z180	z80	Hitachi HD64180, Zilog Z180	// 1985 (HD64180)
+z280	z80	Zilog Z800, Zilog Z280	// 1985 (Z800), 1987 (Z280)
+z380	z180	Zilog Z380	// 1994
+ez80	z180	Zilog eZ80	// 2001
+sm83	z80	Sharp SM83 (Gameboy CPU)	// 1989, lr35902, Sharp LR35902
+r800	~z80	ASCII R800	// 1990
+r2000	z80	Rabbit 2000	// 1999
+r3000	r2000	Rabbit 3000	// 2002
+r4000	r3000	Rabbit 4000, Rabbit 5000	// 2006, 2008
+r6000	r4000	Rabbit 6000	// 2010
+z80n	z80	ZX Spectrum Next CPU	// 2017
+upd9002	z80	NEC µPD9002	//1987
+
+//i86	i80i86	Intel 8086	// 1978
+
+$ENCODINGS
+
+= mem16(2) // z380
+for	DD	FD
+-	(IX+#~)	(IY+#~)
+
+= mem8(3).zilog, mem16(3) // z280
+for	-	DD	FD
+-	(HL)	(IX+#~)	(IY+#~)
+
+= mem8(3).ascii
+for	-	DD	FD
+-	[.HL]	[.IX+#]	[.IY+#]
+
+= mem8(3).sm83
+-	(HL)
+
+= mem8(3).intel
+-	M
+
+= mem8(3)
+if	i8i80	mem8(3).intel
+if	sm83	mem8(3).sm83
+if	r800	mem8(3).ascii
+if	-	mem8(3).zilog
+
+= op8(4).intel // LD only
+0	B
+1	C
+2	D
+3	E
+
+= op8(4).ascii // LD only
+0	.B
+1	.C
+2	.D
+3	.E
+
+= op8(4) // LD only
+if	r800	op8(4).ascii
+if	-	op8(4).intel
+
+= op8(6).intel // LD only
+0	H
+1	L
+
+= op8(6).zilog // LD only
+for	-	DD	FD
+0	H	IXH	IYH
+1	L	IXL	IYL
+
+= op8(6).ascii // LD only
+for	-	DD	FD
+0	.H	.IXH	.IYH
+1	.L	.IXL	.IYL
+
+= op8(6)
+if	i8i80	op8(6).intel
+if	sm83	op8(6).intel
+if	r800	op8(6).ascii
+if	r2000	op8(6).intel
+if	-	op8(6).zilog
+
+= op8(8).dp22
+0	A
+1	B
+2	C
+3	D
+4	E
+5	H
+6	L
+7	M
+
+= op8(8).intel
+0	B
+1	C
+2	D
+3	E
+4	H
+5	L
+6	M
+7	A
+
+= op8(8).zilog // mostly with ED prefixes
+0	B
+1	C
+2	D
+3	E
+4	H
+5	L
+6	(HL)
+7	A
+
+= op8(8).ascii // mostly with ED prefixes
+0	.B
+1	.C
+2	.D
+3	.E
+4	.H
+5	.L
+6	[.HL]
+7	.A
+
+= op8(8)
+if	dp22	op8(8).dp22
+if	i8i80	op8(8).intel
+if	r800	op8(8).ascii
+if	-	op8(8).zilog
+
+= op8(8)' // mostly with ED prefixes
+0	B'
+1	C'
+2	D'
+3	E'
+4	H'
+5	L'
+6	-
+7	A'
+
+= op8(10).zilog // mostly with CB prefixes
+for	-	DD	FD
+0	B	-	-
+1	C	-	-
+2	D	-	-
+3	E	-	-
+4	H	-	-
+5	L	-	-
+6	(HL)	(IX+#~)	(IY+#~)
+7	A	-	-
+
+= op8(10).ascii // mostly with CB prefixes
+for	-	DD	FD
+0	.B	-	-
+1	.C	-	-
+2	.D	-	-
+3	.E	-	-
+4	.H	-	-
+5	.L	-	-
+6	[.HL]	[.IX+#]	[.IY+#]
+7	.A	-	-
+
+= op8(10) // mostly with CB prefixes
+if	sm83	op8(8).zilog
+if	r800	op8(10).ascii
+if	-	op8(10).zilog
+
+= op8(14).zilog
+for	-	DD	FD
+0	B	-	-
+1	C	-	-
+2	D	-	-
+3	E	-	-
+4	H	IXH	IYH
+5	L	IXL	IYL
+6	(HL)	(IX+#~)	(IY+#~)
+7	A	-	-
+
+= op8(14).ascii
+for	-	DD	FD
+0	.B	-	-
+1	.C	-	-
+2	.D	-	-
+3	.E	-	-
+4	.H	.IXH	.IYH
+5	.L	.IXL	.IYL
+6	[.HL]	[.IX+#]	[.IY+#]
+7	.A	-	-
+
+= op8(14)
+if	r800	op8(14).ascii
+if	r2000	op8(10).zilog
+if	-	op8(14).zilog
+
+= op8(8/14)
+if	i8i80	op8(8).intel
+if	sm83	op8(8).zilog
+if	-	op8(14)
+
+= op8(24) // z280, also op8(8/24), op8(14/24)
+for	-	DD	FD
+0	B	(SP+##)	(PC+##)
+1	C	(HL+IX)	(IX+##)
+2	D	(HL+IY)	(IY+##)
+3	E	(IX+IY)	(HL+##)
+4	H	IXH	IYH
+5	L	IXL	IYL
+6	(HL)	(IX+#~)	(IY+#~)
+7	A	(##)	#
+
+= op8(8/24)
+if	z280	op8(24)
+if	-	op8(8)
+if	deft	op8(24)
+
+= op8(14/24)
+if	i8i80	op8(8)
+if	z280	op8(24)
+if	sm83	op8(8)
+if	-	op8(14)
+if	deft	op8(24)
+
+= op16(1)
+-	HL
+
+= op16(1).ascii
+-	.HL
+
+= op16(2) // z380 (and once for z280)
+for	DD	FD
+-	IX	IY
+
+= (op16(2)) // r4000
+for	DD	FD
+-	(IX)	(IY)
+
+= (op16(2)+A) // r4000
+for	DD	FD
+-	(IX+A)	(IY+A)
+
+= opc16(2) // ez80
+for	DD	FD
+-	IY	IX
+
+= op16(3).zilog
+for	-	DD	FD
+-	HL	IX	IY
+
+= op16(3).ascii
+for	-	DD	FD
+-	.HL	.IX	.IY
+
+= empty
+-	""	// implicit H
+
+= op16(3)
+if	i8i80	empty
+if	sm83	op16(1)
+if	r800	op16(3).ascii
+if	-	op16(3).zilog
+
+= (op16(1)) // sm83 only
+-	(HL)
+
+= (op16(3)).zilog
+for	-	DD	FD
+-	(HL)	(IX)	(IY)
+
+= (op16(3)).ascii
+for	-	DD	FD
+-	[.HL]	[.IX]	[.IY]
+
+= (op16(3))
+if	i8i80	empty
+if	sm83	(op16(1))
+if	r800	(op16(3)).ascii
+if	-	(op16(3)).zilog
+
+= op16(1/3)
+if	z280	op16(3)
+if	r800	op16(1).ascii
+if	-	op16(1)
+if	deft	op16(3)
+
+= op16(4).intel
+0	B
+1	D
+2	H
+3	SP
+
+= op16(4).zilog
+0	BC
+1	DE
+2	HL
+3	SP
+
+= op16(4).ascii
+0	.BC
+1	.DE
+2	.HL
+3	.SP
+
+= op16(4)
+if	i80	op16(4).intel
+if	r800	op16(4).ascii
+if	-	op16(4).zilog
+
+= op16(4)' // r2000
+0	BC'
+1	DE'
+2	HL'
+3	SP'
+
+= opx16(3) // z380
+0	BC
+1	DE
+2	-
+3	HL
+
+= (opx16(3)) // z380
+0	(BC)
+1	(DE)
+2	-
+3	(HL)
+
+= opx16(4) // z380
+0	BC
+1	DE
+2	##
+3	HL
+
+= opy16(4) // r4000
+0	BC
+1	DE
+2	IX
+3	IY
+
+= op16(6).zilog
+for	-	DD	FD
+0	BC	-	-
+1	DE	-	-
+2	HL	IX	IY
+3	SP	-	-
+
+= op16(6).ascii
+for	-	DD	FD
+0	.BC	-	-
+1	.DE	-	-
+2	.HL	.IX	.IY
+3	.SP	-	-
+
+= op16(6)
+if	i8i80	op16(4).intel
+if	sm83	op16(4).zilog
+if	r800	op16(6).ascii
+if	-	op16(6).zilog
+
+= op16(4/6)
+if	z280	op16(6)
+if	-	op16(4)
+if	deft	op16(6)
+
+= opx16(7) // z380
+0	BC
+1	DE
+2	(HL)
+3	HL
+4	IX
+5	IY
+6	-
+7	##	// no extra bytes
+
+= opx16(7)' // z380
+0	BC'
+1	DE'
+2	-
+3	HL'
+4	IX'
+5	IY'
+6	-
+7	-
+
+= opx8(8), opx16(8) // z280
+0	(SP+##)
+1	(HL+IX)
+2	(HL+IY)
+3	(IX+IY)
+4	(PC+##)
+5	(IX+##)
+6	(IY+##)
+7	(HL+##)
+
+= op16(12).z280 // z280
+for	-	DD	FD
+0	BC	(HL)	(IX+##)
+1	DE	(##)	(IY+##)
+2	HL	IX	IY
+3	SP	(PC+##)	##
+
+= op16(12)
+if	z280	op16(12).z280
+if	-	op16(6)
+if	deft	op16(12).z280
+
+= op32(2) // r4000
+for	DD	FD
+-	BCDE	JKHL
+
+= op32(4) // r4000
+0	PW
+1	PX
+2	PY
+3	PZ
+
+= op32(4)+# // r4000
+0	PW+#
+1	PX+#
+2	PY+#
+3	PZ+#
+
+= op32(4)+IX // r4000
+0	PW+IX
+1	PX+IX
+2	PY+IX
+3	PZ+IX
+
+= op32(4)+IY // r4000
+0	PW+IY
+1	PX+IY
+2	PY+IY
+3	PZ+IY
+
+= op32(4)+DE // r4000
+0	PW+DE
+1	PX+DE
+2	PY+DE
+3	PZ+DE
+
+= op32(4)+HL // r4000
+0	PW+HL
+1	PX+HL
+2	PY+HL
+3	PZ+HL
+
+= (op32(4)+#) // r4000
+0	(PW+#)
+1	(PX+#)
+2	(PY+#)
+3	(PZ+#)
+
+= (op32(4)+HL) // r4000
+0	(PW+HL)
+1	(PX+HL)
+2	(PY+HL)
+3	(PZ+HL)
+
+= (op32(4)+BC) // r4000
+0	(PW+BC)
+1	(PX+BC)
+2	(PY+BC)
+3	(PZ+BC)
+
+= trg(1)
+-	##~
+
+= trg(2) // z380
+for	DD	FD
+-	PC+##	PC+###
+
+= trg(3) // z280, trg(1/3)
+for	-	DD	FD
+-	##~	(HL)	(PC+##)
+
+= trg(1/3)
+if	z280	trg(3)
+if	-	trg(1)
+if	deft	trg(3)
+
+= cnd(4)
+0	NZ
+1	Z
+2	NC
+3	C
+
+= cnd(8).dp22
+0	FC
+1	FZ
+2	FS
+3	FP
+4	TC
+5	TZ
+6	TS
+7	TP
+
+= cnd(8).i80
+0	NZ
+1	Z
+2	NC
+3	C
+4	PO
+5	PE
+6	P
+7	M
+
+= cnd(8).rabbit
+0	NZ
+1	Z
+2	NC
+3	C
+4	NV|LZ
+5	V|LO
+6	P
+7	M
+
+= cnd(8)
+if	dp22	cnd(8).dp22
+if	r2000	cnd(8).rabbit
+if	r3000	cnd(8).rabbit
+if	r4000	cnd(8).rabbit
+if	r6000	cnd(8).rabbit
+if	-	cnd(8).i80
+
+= cndx(4)
+0	GT
+1	GTU
+2	LT
+3	V
+
+= ctl(3)
+for	DD	ED	FD
+-	XSR	DSR	YSR
+
+= ddir // z380
+for	DD	FD
+0	W	LW
+1	IB, W	IB, LW
+2	IW, W	IW, LW
+3	IB	IW
+
+= mode // z380
+for	DD	ED	FD
+-	LW	LCK	XM
+
+= imode(3)
+0	0
+1	-
+2	1
+3	2
+
+= imode(4)
+0	0
+1	3
+2	1
+3	2
+
+= imode
+if	z280	imode(4)
+if	z380	imode(4)
+if	-	imode(3)
+if	deft	imode(4)
+
+= ipset // r2000
+0	0
+1	2
+2	1
+3	3
+
+= im
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+
+= rstim.zilog
+0	00H
+1	08H
+2	10H
+3	18H
+4	20H
+5	28H
+6	30H
+7	38H
+
+= rstim
+if	i8	im
+if	i8i80	im
+if	-	rstim.zilog
+
+= inpim.i8
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+
+= inpim.dp22
+0	""
+1	-
+2	-
+3	-
+4	-
+5	-
+6	-
+7	-
+
+= inpim
+if	dp22	inpim.dp22
+if	i8	inpim.i8
+if	deft	inpim.i8
+
+= outim.i8
+0	-
+1	-
+2	-
+3	-
+4	-
+5	-
+6	-
+7	-
+8	8
+9	9
+10	10
+11	11
+12	12
+13	13
+14	14
+15	15
+16	16
+17	17
+18	18
+19	19
+20	20
+21	21
+22	22
+23	23
+24	24
+25	25
+26	26
+27	27
+28	28
+29	29
+30	30
+31	31
+
+= outim.dp22
+0	-
+1	-
+2	-
+3	-
+4	-
+5	-
+6	-
+7	-
+8	ADR
+9	STATUS
+10	DATA
+11	WRITE
+12	COM1
+13	COM2
+14	COM3
+15	COM4
+16	-
+17	-
+18	-
+19	-
+20	BEEP
+21	CLICK
+22	DECK1
+23	DECK2
+24	RBK
+25	WBK
+26	-
+27	BSP
+28	SF
+29	SB
+30	REWND
+31	TSTOP
+
+= outim
+if	dp22	outim.dp22
+if	i8	outim.i8
+if	deft	outim.i8
+
+= str
+0	""
+1	""
+2	""
+3	""
+
+= (8)REG	// r6000
+0	1REG
+1	2REG
+2	3REG
+3	4REG
+4	5REG
+5	6REG
+6	7REG
+7	8REG
+
+=
+
+$INSTRUCTIONS
+
+// A //
+
+dp22			10 001 aaa	AC<	op8(8)
+i8i80			10 001 aaa	ADC	A, op8(14/24)	\
+	i8i80:				ADC	op8(14/24)	\
+	z280:				ADC	[A], op8(14/24)	\
+	r800:				ADDC	.A, op8(14/24)	!FD>a=7
+
+dp22			00 001 100	AC	#	\
+	i8:				ACI	#
+i8i80			11 001 110	ADC	A, #	\
+	i8i80:				ACI	#	\
+	z280:				ADC	[A], #	\
+	r800:				ADDC	.A, #
+
+z80		ED	01 aa1 010	ADC	op16(1/3), op16(4/6)	\
+	r800:				ADC	op16(1/3), op16(4/6)
+
+z380		ED	10 001 1aa	ADCW	[HL], opx16(4)
+z380		*	10 001 111	ADCW	[HL], op16(2)
+z380		*	11 001 110	ADCW	[HL], mem16(2)
+
+z280		ED	01 101 101	ADD	op16(3), A
+
+dp22			10 000 aaa	AD<	op8(8)
+i8i80			10 000 aaa	ADD	A, op8(14/24)	\
+	i8i80:				ADD	op8(14/24)	\
+	z280:				ADD	[A], op8(14/24)	\
+	r800:				ADD	.A, op8(14/24)	!FD>a=7
+
+dp22			00 000 100	AD	#	\
+	i8:				ADI	#
+i8i80			11 000 110	ADD	A, #	\
+	i8i80:				ADI	#	\
+	z280:				ADD	[A], #	\
+	r800:				ADD	.A, #
+
+i80	X CS RS		00 aa1 001	ADD	op16(3), op16(6)	\
+	i80:				DAD	op16(3), op16(6)	\
+	r800:				ADD	op16(3), op16(6)
+
+z380	X	ED	11 000 110	ADD	HL, (##~)
+z380	X	ED	10 000 010	ADD	SP, ##~
+
+z280		ED	11 aa0 110	ADDW	[HL], op16(12)
+
+z380		ED	10 000 1aa	ADDW	[HL], opx16(4)
+z380		*	10 000 111	ADDW	[HL], op16(2)
+z380		*	11 000 110	ADDW	[HL], mem16(2)
+
+dp22v2			00 011 000	ALPHA
+
+dp22			10 100 aaa	ND<	op8(8)
+i8i80			10 100 aaa	AND	op8(14/24)	\
+	i8i80:				ANA	op8(14/24)	\
+	z280,z380:			AND	[A], op8(14/24)	\
+	ez80:				AND	A, op8(14/24)	\
+	r800:				AND	.A, op8(14/24)	!FD>a=7
+
+dp22			00 100 100	ND	#	\
+	i8:				NDI	#
+i8i80			11 100 110	AND	#	\
+	i8i80:				ANI	#	\
+	z280,z380:			AND	[A], #	\
+	ez80:				AND	A, #	\
+	r800:				AND	.A, #
+
+z380		ED	10 100 1aa	ANDW	[HL], opx16(4)
+z380		*	10 100 111	ANDW	[HL], op16(2)
+z380		*	11 100 110	ANDW	[HL], mem16(2)
+
+vm1	MB RS		00 010 000	ANX
+
+!i85			00 010 000	*ARHL
+
+// B //
+
+dp22v2			00 010 000	BETA
+
+z80		CB	01 aaa bbb	BIT	im, op8(10)
+!z80		CB	01 aaa bbb	~BIT	im, mem16(2)	!b=6
+z80n		CB	01 aaa bbb	~BIT	im, mem16(2)	!b=6
+
+z380		ED	11 001 111	BTEST
+
+// C //
+
+dp22			01 000 110	CALL	##	\
+	i8:				CAL	##
+i8			01 aaa 110	~CAL	##	!a=0
+i8i80	X		11 001 101	CALL	trg(1/3)	\
+	i8i80:				CALL	trg(1/3)	\
+	r800:				CALL	trg(1/3)
+
+dp22			01 aaa 010	C<	cnd(8), ##
+i8i80	X		11 aaa 100	CALL	cnd(8), trg(1/3)	\
+	i8i80:				C<	cnd(8), trg(1/3)	\
+	r800:				CALL	cnd(8), trg(1/3)
+
+!i80			11 aa1 101	~CALL	##	!a=0
+
+v20		ED	11 101 101	CALLN	#
+upd9002		ED	11 101 101	CALLN	#
+
+z380	X	ED	11 001 101	CALR	PC+#
+z380	X	*	11 001 101	CALR	trg(2)
+z380	X	ED	11 aaa 100	CALR	cnd(8), PC+#
+z380	X	*	11 aaa 100	CALR	cnd(8), trg(2)
+
+i80			00 111 111	CCF	\
+	i80:				CMC	\
+	r800:				NOTC
+
+dp22			10 111 aaa	CP<	op8(8)
+i8i80			10 111 aaa	CP	op8(14/24)	\
+	i8i80:				CMP	op8(14/24)	\
+	z280,z380:			CP	[A], op8(14/24)	\
+	ez80:				CP	A, op8(14/24)	\
+	r800:				CMP	.A, op8(14/24)	!FD>a=7
+
+dp22			00 111 100	CP	#	\
+	i8:				CPI	#
+i8i80			11 111 110	CP	#	\
+	i8i80:				CPI	#	\
+	z280,z380:			CP	[A], #	\
+	ez80:				CP	A, #	\
+	r800:				CMP	.A, #
+
+z280		ED	11 aa0 111	CPW	[HL], op16(12)
+
+z380		ED	10 111 1aa	CPW	[HL], opx16(4)
+z380		*	10 111 111	CPW	[HL], op16(2)
+z380		*	11 111 110	CPW	[HL], mem16(2)
+
+z80	X	ED	10 1aa 001	CP{I}{R}	str	\
+	r800:				CMP{R}	.A, [.HL{I}], str
+
+i80			00 101 111	CPL	A	\
+	i80:				CMA	\
+	z280,z380:			CPL	[A]	\
+	r800:				NOT	.A
+
+z380		DD	00 101 111	CPLW	[HL]
+
+// D //
+
+i80			00 100 111	DAA	\
+	r800:				ADJ	.A
+
+vm1	CS RS		11 001 011	DCMP	B
+vm1	CS RS		11 011 101	DCMP	D
+
+z380			11 000 0aa	DDIR	ddir
+
+i8			00 aaa 001	DC<	op8(8)	!a=0,a=7
+!i8i80			00 aaa 101	DEC	op8(14/24)	\
+	i8i80:				DCR	op8(14/24)	!a=6,a=7
+i80			00 aaa 101	DEC	op8(14/24)	\
+	i80:				DCR	op8(14/24)	\
+	r800:				DEC	op8(14/24)	!FD>a=7
+
+i80	X		00 aa1 011	DEC[W*]	op16(12)	\
+	i80:				DCX	op16(12)	\
+	z280,z380:			DEC[W*]	op16(12)	\
+	r800:				DEC	op16(12)	!FD>a=3
+
+dp22v2			00 100 000	DI
+i80	P		11 110 011	DI
+
+z280	P	ED	01 110 111	DI	#
+
+z380		DD	11 110 011	DI	#
+
+z280		ED	11 aaa 100	DIV	[HL], op8(24)
+
+z280		ED	11 aa1 010	DIVW	[DEHL], op16(12)
+
+z280		ED	11 aaa 101	DIVU	[HL], op8(24)
+
+z280		ED	11 aa1 011	DIVUW	[DEHL], op16(12)
+
+z380		ED CB	10 111 aaa	DIVUW	[HL], opx16(7)	!a=2
+z380		* CB	10 111 010	DIVUW	[HL], mem16(2)
+
+z80	X		00 010 000	DJNZ	PC+#	\
+	r800:				DBNZ	PC+#
+z380	X	*	00 010 000	DJNZ	trg(2)
+
+i85			00 001 000	*DSUB
+vm1	CS RS		00 001 000	DSUB	B
+
+vm1	CS RS		00 011 000	DSUB	D
+
+// E //
+
+dp22v2			00 101 000	EI
+i80	P		11 111 011	EI
+
+z280	P	ED	01 111 111	EI	#
+
+z380		DD	11 111 011	EI	#
+
+z280		ED	11 101 111	EX	H, L
+
+z280		ED	00 aaa 111	EX	A, op8(24)	!FD>a=7
+z380		ED	00 aaa 111	EX	A, op8(8)
+
+z380		CB	00 110 aaa	EX	op8(8), op8(8)'	!a=6
+
+i80	L		11 101 011	EX	DE, HL	\
+	i80:				XCHG	\
+	r800:				XCH	.DE, .HL
+z280			11 101 011	EX	op16(2), HL
+z380	L	ED	00 000 101	EX	BC, DE
+z380	L	ED	00 001 101	EX	BC, HL
+z380	L	ED	00 aa0 011	EX	opx16(3), IX
+z380	L	ED	00 aa1 011	EX	opx16(3), IY
+z380	L	ED	00 101 011	EX	IX, IY
+
+i80	L RS		11 100 011	EX	(SP), op16(3)	\
+	i80:				XTHL	op16(3)	\
+	r800:				XCH	[.SP], op16(3)
+
+z80			00 001 000	EX	AF, AF'	\
+	r800:				XCH	.AF, .AF'
+
+z380	L	ED CB	00 110 aaa	EX	opx16(7), opx16(7)'	!a=2,a=7
+
+z80			11 011 001	EXX	\
+	r800:				XCHX
+
+z380		DD	11 011 001	EXXX
+z380		FD	11 011 001	EXXY
+
+z380		ED	11 011 001	EXALL
+
+z280		ED	01 100 100	EXTS	A
+z380	L	ED	01 100 101	EXTS	[A]
+
+z280		ED	01 101 100	EXTS	HL
+z380		ED	01 110 101	EXTSW	[HL]
+
+// F //
+// G //
+// H //
+
+dp22			11 111 111	HALT	\
+	i8:				HLT
+dp22			00 000 00a	HALT	\
+	i8:				~HLT
+i8i80	P		01 110 110	HALT	\
+	i8i80:				HLT
+
+// I //
+
+z80	P	ED	01 0aa 110	IM	imode	\
+	r800:				IM	imode
+!z80		ED	01 1aa 110	~IM	imode
+z80n		ED	01 1aa 110	~IM	imode
+!z80		ED	01 001 110	*IM	?
+z80n		ED	01 001 110	*IM	?
+!z80		ED	01 101 110	~IM	?
+z80n		ED	01 101 110	~IM	?
+
+z80	(P)	ED	01 aaa 000	IN	op8(8/24), (C)	\
+	ez80:				IN	op8(8/24), ([B]C)	\
+	r800:				IN	op8(8/24), [.C]	!a=6,FD>a=7
+!z80		ED	01 110 000	*IN	[F], (C)
+z280	(P)	ED	01 110 000	=TSTI	(C)
+r800		ED	01 110 000	IN	.F, [.C]
+z80n		ED	01 110 000	=IN	(C)
+
+dp22			01 00a aa1	INPUT	inpim	\
+	i8:				INP	inpim
+
+i80	(P)		11 011 011	IN	A, (#)	\
+	i80:				IN	#	\
+	r800:				IN	.A, [#]
+
+z180		ED	00 aaa 000	IN0	op8(8), (#)	!a=6
+z380		ED	00 110 000	IN0	(#)
+
+z380		ED	11 011 011	INA	A, (##~)
+
+z280	(P)	ED	10 110 111	IN[W]	HL, (C)
+
+z380		DD	01 000 000	INW	BC, (C)
+z380		DD	01 010 000	INW	DE, (C)
+z380		DD	01 111 000	INW	HL, (C)
+
+z380		FD	11 011 011	INAW	HL, (##~)
+
+i8			00 aaa 000	IN<	op8(8)	!a=0,a=7
+!i8i80			00 aaa 100	INC	op8(14/24)	\
+	i8i80:				INR	op8(14/24)	!a=6,a=7
+i80			00 aaa 100	INC	op8(14/24)	\
+	i80:				INR	op8(14/24)	\
+	r800:				INC	op8(14/24)	!FD>a=7
+
+i80	X		00 aa0 011	INC[W*]	op16(12)	\
+	i80:				INX	op16(12)	\
+	z280,z380:			INC[W*]	op16(12)	\
+	r800:				INC	op16(12)	!FD>a=3
+
+z80	(P)	ED	10 1aa 010	IN{I}{R}	str	\
+	r800:				IN{R}	[.HL{I}], [.C], str
+z280	(P)	ED	10 0aa 010	IN{I}{R}W	str
+z380		ED	11 1aa 010	IN{I}{R}W	str
+
+ez80		ED	10 0aa 100	IN{I}2{R}	str
+ez80		ED	10 0aa 010	IN{I}M{R}	str
+ez80		ED	11 00a 010	IN{I}RX	str
+
+// J //
+
+z280		DD	00 101 000	JAF	PC+#
+
+z280		DD	00 100 000	JAR	PC+#
+
+!i85			11 011 101	*JNK	##
+!i85			11 111 101	*JK	##
+
+dp22			01 000 100	JMP	##
+i8			01 aaa 100	~JMP	##	!a=0
+i8i80	X		11 000 011	JP	trg(1/3)	\
+	i8i80:				JMP	trg(1/3)	\
+	r800:				BR	trg(1/3)	!DD
+
+i80	X RS		11 101 001	JP	(op16(3))	\
+	i80:				PCHL	(op16(3))	\
+	r800:				BR	(op16(3))
+
+dp22			01 aaa 000	J<	cnd(8), ##
+i8i80	X		11 aaa 010	JP	cnd(8), trg(1/3)	\
+	i8i80:				J<	cnd(8), trg(1/3)	\
+	r800:				B<	cnd(8), trg(1/3)
+
+!i80			11 001 011	~JMP	##
+
+vm1			11 111 101	JOF	##
+
+z80	X		00 011 000	JR	PC+#	\
+	r800:				SHORT BR	PC+#
+z380	X		00 011 000	JR	trg(2)
+
+z80	X		00 1aa 000	JR	cnd(4), PC+#	\
+	r800:				SHORT B<	cnd(4), PC+#
+z380	X		00 1aa 000	JR	cnd(4), trg(2)
+
+// K //
+// L //
+
+dp22			11 aaa bbb	L<<	op8(8), op8(8)	!a=b
+i8			11 001 001	LBB
+i8			11 010 010	LCC
+i8			11 011 011	LDD
+i8			11 100 100	LEE
+i8			11 101 101	LHH
+i8			11 110 110	LLL
+
+i8i80			01 111 aaa	LD	A, op8(14/24)	\
+	i8i80:				MOV	A, op8(14/24)	\
+	r800:				LD	.A, op8(14/24)	!a=7
+i8i80			00 111 110	LD	A, #	\
+	i8i80:				MVI	A, #	\
+	r800:				LD	.A, #
+i80	MB		00 111 010	LD	A, (##~)	\
+	i80:				LDA	##	\
+	r800:				LD	.A, [##]
+
+i80	MB		00 001 010	LD	A, (BC)	\
+	i80:				LDAX	B	\
+	r800:				LD	.A, [.BC]
+i80	MB		00 011 010	LD	A, (DE)	\
+	i80:				LDAX	D	\
+	r800:				LD	.A, [.DE]
+
+i8i80			01 aaa 111	LD	op8(8/14), A	\
+	i8i80:				MOV	op8(8/14), A	\
+	r800:				LD	op8(8/14), .A	!a=7
+i80			01 111 111	LD	A, A	\
+	i80:				MOV	A, A	\
+	r800:				LD	.A, .A
+i80	MB		00 110 010	LD	(##~), A	\
+	i80:				STA	##	\
+	r800:				LD	[##], .A
+
+z280		ED	00 aaa 011	LD	opx8(8), A
+
+i80	MB		00 000 010	LD	(BC), A	\
+	i80:				STAX	B	\
+	r800:				LD	[.BC], .A
+i80	MB		00 010 010	LD	(DE), A	\
+	i80:				STAX	D	\
+	r800:				LD	[.DE], .A
+
+dp22			00 aaa 110	L<	op8(8), #	\
+	i8:				L<I	op8(8), #
+i8i80			00 aaa 110	LD	op8(14/24), #	\
+	i8i80:				MVI	op8(14/24), #	\
+	r800:				LD	op8(14/24), #	!>a=7,FD>a=7
+
+// It would be much easier to write it this way, if Zilog CPUs were ignored:
+//!i8i80			01 aaa bbb	MOV	op8(8), op8(8)	!a=6,b=6,a=7,b=7
+//!i8i80			01 aaa 111	MOV	op8(8), A	!a=6,a=7
+//!i8i80			01 111 aaa	MOV	A, op8(8)	!a=6,a=7
+//i80			01 aaa bbb	MOV	op8(8), op8(8)	!a=6,b=6
+//i8i80			01 aaa 110	MOV	op8(8), M	!a=6
+//i8i80			01 110 aaa	MOV	M, op8(8)	!a=6
+
+i8i80			01 0aa 0bb	LD	op8(4), op8(4)	\
+	i8i80:				MOV	op8(4), op8(4)
+i8i80			01 0aa 10b	LD	op8(4), op8(6)	\
+	i8i80:				MOV	op8(4), op8(6)
+i8i80			01 10a 0bb	LD	op8(6), op8(4)	\
+	i8i80:				MOV	op8(6), op8(4)
+i8i80			01 10a 10b	LD	op8(6), op8(6)	\
+	i8i80:				MOV	op8(6), op8(6)
+i8i80			01 aaa 110	LD	op8(8), mem8(3)	\
+	i8i80:				MOV	op8(8), mem8(3)	!a=6,a=7	// only h, l
+i8i80			01 110 aaa	LD	mem8(3), op8(8)	\
+	i8i80:				MOV	mem8(3), op8(8)	!a=6,a=7	// only h, l
+
+z80	P	ED	01 000 111	LD	I, A	\
+	r800:				LD	.I, .A	\
+	r2000:				LD	EIR, A
+z80	P	ED	01 001 111	LD	R, A	\
+	r800:				LD	.R, .A \
+	r2000:				LD	IIR, A
+z80	P	ED	01 010 111	LD	A, I	\
+	r800:				LD	.A, .I \
+	r2000:				LD	A, EIR
+z80	P	ED	01 011 111	LD	A, R	\
+	r800:				LD	.A, .R \
+	r2000:				LD	A, IIR
+z380	L	DD	01 010 111	LD[W]	HL, I
+z380	L	DD	01 000 111	LD[W]	I, HL
+
+ez80		ED	01 101 110	LD	A, MB
+ez80		ED	01 101 101	LD	MB, A
+ez80		ED	11 010 111	LD	HL, I
+ez80		ED	11 000 111	LD	I, HL
+
+i80	L		00 aa0 001	LD[W*]	op16(12), ##~	\
+	i80:				LXI	op16(12), ##	\
+	z280:				LD[W*]	op16(12), ##	\	// note: z280 also accepts LDA op6(3), (##)
+	z380:				LD	op16(12), ##~	\
+	r800:				LD	op16(12), ##	!FD
+z80		FD	00 100 001	LD[W]	IY, ##	\
+	z380:				LD	IY, ##~	\
+	r800:				LD	.IY, ##
+z280		ED	00 aaa 100	LD[W]	op16(3), opx16(8)
+z280		ED	00 aaa 101	LD[W]	opx16(8), op16(3)
+i80	L MB RS		00 101 010	LD[W]	op16(3), (##~)	\
+	i80:				LHLD	op16(3), ##	\
+	r800:				LD	op16(3), [##]
+i80	L MB RS		00 100 010	LD[W]	(##~), op16(3)	\
+	i80:				SHLD	##, op16(3)	\
+	r800:				LD	[##], op16(3)
+z80	L	ED	01 aa1 011	LD[W]	op16(4), (##~)	\
+	r800:				LD	op16(4), [##]	!a=2
+z80	L	ED	01 aa1 011	~LD[W]	op16(4), (##~)	!a=0,a=1,a=3
+// Note: this is actually an undocumented "instruction"
+^r800		ED	01 aa1 011	-		!a=0,a=1,a=3
+z280		ED	00 aa0 110	LD[W]	op16(4), mem16(3)
+z80	L	ED	01 aa0 011	LD[W]	(##~), op16(4)	\
+	r800:				LD	[##], op16(4)	!a=2
+z80	L	ED	01 aa0 011	~LD[W]	(##~), op16(4)	!a=0,a=1,a=3
+// Note: this is actually an undocumented "instruction"
+^r800		ED	01 aa0 011	-		!a=0,a=1,a=3
+z280		ED	00 aa1 110	LD[W]	mem16(3), op16(4)
+
+i80	L RS		11 111 001	LD	SP, op16(3)	\
+	i80:				SPHL	op16(3)	\
+	z280:				LD[W]	SP, op16(3)	\
+	r800:				LD	.SP, op16(3)
+
+z380	L	ED	00 aa0 110	LDW	(opx16(3)), ##~
+
+z380	L	DD	00 aa0 010	LD[W]	opx16(3), DE
+z380	L	ED	00 aa0 010	LD[W]	opx16(3), BC
+z380	L	FD	00 aa0 010	LD[W]	opx16(3), HL
+z380	L	*	00 aa1 011	LD[W]	opx16(3), op16(2)
+z380	L	*	00 aa0 111	LD[W]	op16(2), opx16(3)
+z380	L	DD	00 100 111	LD[W]	IX, IY
+z380	L	FD	00 100 111	LD[W]	IY, IX
+z380	L	DD	00 aa1 1bb	LD[W]	opx16(3), (opx16(3))	// aa, bb
+z380	L	FD	00 bb1 1aa	LD[W]	(opx16(3)), opx16(3)	// bb, aa
+z380	L	*	00 aa0 011	LD[W]	op16(2), (opx16(3))
+z380	L	*	00 aa0 001	LD[W]	(opx16(3)), op16(2)
+z380	L	* CB	00 aa0 011	LD[W]	opx16(3), mem16(2)
+z380	L	* CB	00 aa1 011	LD[W]	mem16(2), opx16(3)
+z380	L	FD CB	00 100 011	LD[W]	IX, (IY+#~)
+z380	L	DD CB	00 100 011	LD[W]	IY, (IX+#~)
+z380	L	FD CB	00 101 011	LD[W]	(IY+#~), IX
+z380	L	DD CB	00 101 011	LD[W]	(IX+#~), IY
+z380	L	DD CB	00 aa0 001	LD[W]	opx16(3), (SP+#~)
+z380	L	* CB	00 100 001	LD[W]	op16(2), (SP+#~)
+z380	L	DD CB	00 aa1 001	LD[W]	(SP+#~), opx16(3)
+z380	L	* CB	00 101 001	LD[W]	(SP+#~), op16(2)
+
+ez80		ED	00 aa1 111	LD	(HL), op16(4)	!a=3
+ez80		*	00 aa1 111	LD	mem16(2), op16(4)	!a=3
+ez80		ED	00 111 110	LD	(HL), IY
+ez80		*	00 111 110	LD	mem16(2), opc16(2)
+ez80		ED	00 111 111	LD	(HL), IX
+ez80		*	00 111 111	LD	mem16(2), op16(2)
+
+ez80		ED	00 aa0 111	LD	op16(4), (HL)	!a=3
+ez80		*	00 aa0 111	LD	op16(4), mem16(2)	!a=3
+ez80		ED	00 110 001	LD	IY, (HL)
+ez80		*	00 110 001	LD	opc16(2), mem16(2)
+ez80		ED	00 110 111	LD	IX, (HL)
+ez80		*	00 110 111	LD	op16(2), mem16(2)
+
+z280		ED	00 aaa 010	LDA	op16(3), opx16(8)
+
+z80		ED	10 1aa 000	LD{I}{R}	str	\
+	r800:				MOVE{R}	str, [.HL{I}], [.DE{I}]
+
+z380	L	ED	11 1aa 000	LD{I}{R}W	str
+
+!i85			00 101 000	*LDHI	#	// unsigned
+!i85			00 111 000	*LDSI	#	// unsigned
+
+z280	P	ED	01 100 110	LDCTL	op16(3), (C)
+z280	P	ED	01 101 110	LDCTL	(C), op16(3)
+
+z280	P	ED	10 000 111	LDCTL	op16(3), USP
+z280	P	ED	10 001 111	LDCTL	USP, op16(3)
+
+z380		DD	11 001 000	LDCTL	SR, A
+z380		*	11 011 000	LDCTL	ctl(3), A
+z380		DD	11 001 010	LDCTL	SR, #
+z380		*	11 011 010	LDCTL	ctl(3), #
+z380		*	11 010 000	LDCTL	A, ctl(3)
+
+z380	L	ED	11 000 000	LDCTL	HL, SR
+z380	L	ED	11 001 000	LDCTL	SR, HL
+
+z280	P	ED	10 000 110	LDUD	A, mem8(3)
+z280	P	ED	10 001 110	LDUD	mem8(3), A
+
+z280	P	ED	10 010 110	LDUP	A, mem8(3)
+z280	P	ED	10 011 110	LDUP	mem8(3), A
+
+ez80		ED	00 aa0 010	LEA	op16(4), IX+#	!a=3
+ez80		ED	00 aa0 011	LEA	op16(4), IY+#	!a=3
+ez80		ED	01 010 100	LEA	IX, IY+#
+ez80		ED	01 010 101	LEA	IY, IX+#
+ez80		ED	00 110 010	LEA	IX, IX+#
+ez80		ED	00 110 011	LEA	IY, IY+#
+
+i85			11 101 101	*LHLX
+vm1	MB RS		11 101 101	LHLX
+
+// M //
+
+z180		ED	01 aa1 100	MLT	op16(4)
+
+z280		ED	11 aaa 000	MULT	[A], op8(24)
+
+z280		ED	11 aa0 010	MULTW	[HL], op16(12)
+
+z380		ED CB	10 010 aaa	MULTW	[HL], opx16(7)	!a=2
+z380		* CB	10 010 010	MULTW	[HL], mem16(2)
+
+z280		ED	11 aaa 001	MULTU	[A], op8(24)
+r800		ED	11 aaa 001	MULUB	.A, op8(8)	!a=6,a=4,a=5,a=7
+r800		ED	11 aaa 001	*MULUB	.A, op8(8)	!a=6,a=0,a=1,a=2,a=3
+
+z280		ED	11 aa0 011	MULTUW	[HL], op16(12)
+r800		ED	11 aa0 011	MULUW	.HL, op16(4)	!a=1,a=2
+r800		ED	11 aa0 011	*MULUW	.HL, op16(4)	!a=0,a=3
+
+z380		ED CB	10 011 aaa	MULTUW	[HL], opx16(7)	!a=2
+z380		* CB	10 011 010	MULTUW	[HL], mem16(2)
+
+z380		DD	11 001 111	MTEST
+
+// N //
+
+z80		ED	01 000 100	NEG	\
+	z280,z380:			NEG	[A]	\
+	r800:				NEG	.A
+!z80		ED	01 aaa 100	~NEG	!a=0
+z80n		ED	01 aaa 100	~NEG	!a=0
+
+z280		ED	01 001 100	NEG	HL
+
+z380		ED	01 010 100	NEGW	[HL]
+
+dp22			11 000 000	NOP
+i80			00 000 000	NOP
+
+!i80			00 aaa 000	~NOP	!a=0
+
+// O //
+
+dp22			10 110 aaa	OR<	op8(8)
+i8i80			10 110 aaa	OR	op8(14/24)	\
+	i8i80:				ORA	op8(14/24)	\
+	z280,z380:			OR	[A], op8(14/24)	\
+	ez80:				OR	A, op8(14/24)	\
+	r800:				OR	.A, op8(14/24)	!FD>a=7
+
+dp22			00 110 100	OR	#	\
+	i8:				ORI	#
+i8i80			11 110 110	OR	#	\
+	i8i80:				ORI	#	\
+	z280,z380:			OR	[A], #	\
+	ez80:				OR	A, #	\
+	r800:				OR	.A, #
+
+z380		ED	10 110 1aa	ORW	[HL], opx16(4)
+z380		*	10 110 111	ORW	[HL], op16(2)
+z380		*	11 110 110	ORW	[HL], mem16(2)
+
+vm1	MB RS		00 100 000	ORX
+
+z80	(P)	ED	10 1aa 011	O{U}T{I}{R}	str	\
+	r800:				OUT{R}	[.C], [.HL{I}], str
+
+z180		ED	10 0aa 011	OT{I}M{R}	str
+
+z280	(P)	ED	10 0aa 011	O{U}T{I}{R}W	str
+
+z380		ED	11 1aa 011	O{U}T{I}{R}W	str
+
+ez80		ED	10 1aa 100	O{U}T{I}2{R}	str
+ez80		ED	11 00a 011	OT{I}RX	str
+
+z80	(P)	ED	01 aaa 001	OUT	(C), op8(8/24)	\
+	ez80:				OUT	([B]C), op8(8/24)	\
+	r800:				OUT	[.C], op8(8/24)	!a=6,FD>a=7
+!z80		ED	01 110 001	*OUT	(C), 0
+z80n		ED	01 110 001	OUT	(C), 0
+
+z380		ED	01 110 001	OUT	(C), #
+
+dp22			01 aaa aa1	EX	outim	\
+	i8:				OUT	outim
+i80	(P)		11 010 011	OUT	(#), A	\
+	i80:				OUT	#	\
+	r800:				OUT	[#], .A
+
+z180		ED	00 aaa 001	OUT0	(#), op8(8)	!a=6
+
+z380		ED	11 010 011	OUTA	(##~), A
+
+z280	(P)	ED	10 111 111	OUT[W]	(C), HL
+
+z380		DD	01 000 001	OUTW	(C), BC
+z380		DD	01 010 001	OUTW	(C), DE
+z380		DD	01 111 001	OUTW	(C), HL
+z380		FD	01 111 001	OUTW	(C), ##
+
+z380		FD	11 010 011	OUTAW	(##~), HL
+
+// P //
+
+z280		ED	01 100 101	PCACHE
+
+ez80		ED	01 100 101	PEA	IX+#
+ez80		ED	01 100 110	PEA	IY+#
+
+dp22v2			00 110 000	POP
+i80	L		11 aa0 001	POP	op16(12)	\
+	i80:				POP	op16(12)	\
+	r800:				POP	op16(12)	!>a=3,FD
+i80	L		11 110 001	POP	AF	\
+	i80:				POP	PSW	\
+	r800:				POP	.AF
+z80		FD	11 100 001	POP	IY	\
+	r800:				POP	.IY
+
+z380		ED	11 000 001	POP	SR
+
+dp22v2			00 111 000	PUSH
+i80	L		11 aa0 101	PUSH	op16(12)	\
+	i80:				PUSH	op16(12)	\
+	r800:				PUSH	op16(12)	!>a=3,FD
+i80	L		11 110 101	PUSH	AF	\
+	i80:				PUSH	PSW	\
+	r800:				PUSH	.AF
+z80		FD	11 100 101	PUSH	IY	\
+	r800:				PUSH	.IY
+z280		FD	11 110 101	PUSH	##
+
+z380	L	ED	11 000 101	PUSH	SR
+z380	L	FD	11 110 101	PUSH	##~
+
+// Q //
+// R //
+
+z80		CB	10 aaa bbb	RES	im, op8(10)
+!z80		CB	10 aaa bbb	*RES	im, mem16(2), op8(8)	!b=6
+z80n		CB	10 bbb aaa	=RES	op8(8), im, mem16(2)	!a=6
+
+z380		*	11 111 111	RESC	mode	!FD
+
+dp22			00 000 111	RETURN	\
+	i8:				RET
+i8			00 aaa 111	~RET	!a=0
+i8i80	X		11 001 001	RET
+
+dp22			00 aaa 011	R<	cnd(8)
+i8i80	X		11 aaa 000	RET	cnd(8)	\
+	i8i80:				R<	cnd(8)
+
+!i80			11 011 001	~RET
+
+z380		ED	01 010 101	RETB			// listed as reserved
+
+v20		ED	11 111 101	RETEM
+upd9002		ED	11 111 101	RETEM
+
+z80	X (P)	ED	01 001 101	RETI
+
+z280	(P)	ED	01 010 101	RETIL
+
+z80	X (P)	ED	01 000 101	RETN
+!z80	X	ED	01 aaa 101	~RETN		!a=0,a=1
+z80n	X	ED	01 aaa 101	~RETN		!a=0,a=1
+
+!i85			00 100 000	RIM
+
+z80		CB	00 010 aaa	RL	op8(10)	\
+	r800:				ROLC	op8(10)
+!z80		CB	00 010 aaa	*RL	mem16(2), op8(8)	!a=6
+z80n		CB	00 010 aaa	=RL	op8(8), mem16(2)	!a=6
+
+i8			00 010 010	RAL
+i8i80			00 010 111	RLA	\
+	i8i80:				RAL	\
+	r800:				ROLCA
+
+!i85			00 011 000	*RDEL
+
+z380		ED CB	00 010 aaa	RLW	opx16(7)	!a=7
+z380		* CB	00 010 010	RLW	mem16(2)
+
+z80		CB	00 000 aaa	RLC	op8(10)	\
+	r800:				ROL	op8(10)
+!z80		CB	00 000 aaa	*RLC	mem16(2), op8(8)	!a=6
+z80n		CB	00 000 aaa	=RLC	op8(8), mem16(2)	!a=6
+
+dp22			00 000 010	SLC	\
+	i8:				RLC
+i8i80			00 000 111	RLCA	\
+	i8i80:				RLC	\
+	r800:				ROLA
+
+z380		ED CB	00 000 aaa	RLCW	opx16(7)	!a=7
+z380		* CB	00 000 010	RLCW	mem16(2)
+
+z80		ED	01 101 111	RLD	\
+	r800:				ROL4	[.HL]
+
+z80		CB	00 011 aaa	RR	op8(10)	\
+	r800:				RORC	op8(10)
+!z80		CB	00 011 aaa	*RR	mem16(2), op8(8)	!a=6
+z80n		CB	00 011 aaa	=RR	op8(8), mem16(2)	!a=6
+
+i8			00 011 010	RAR
+i8i80			00 011 111	RRA	\
+	i8i80:				RAR	\
+	r800:				RORCA
+
+z380		ED CB	00 011 aaa	RRW	opx16(7)	!a=7
+z380		* CB	00 011 010	RRW	mem16(2)
+
+z80		CB	00 001 aaa	RRC	op8(10)	\
+	r800:				ROR	op8(10)
+!z80		CB	00 001 aaa	*RRC	mem16(2), op8(8)	!a=6
+z80n		CB	00 001 aaa	=RRC	op8(8), mem16(2)	!a=6
+
+dp22			00 001 010	SRC	\
+	i8:				RRC
+i8i80			00 001 111	RRCA	\
+	i8i80:				RRC	\
+	r800:				RORA
+
+z380		ED CB	00 001 aaa	RRCW	opx16(7)	!a=7
+z380		* CB	00 001 010	RRCW	mem16(2)
+
+z80		ED	01 100 111	RRD	\
+	r800:				ROR4	[.HL]
+
+ez80		ED	01 111 110	RSMIX
+
+i8			00 aaa 101	RST	rstim
+i8i80	X		11 aaa 111	RST	rstim	\
+	i8i80:				RST	rstim	\
+	r800:				BRK	rstim
+
+!i85			11 001 011	*RSTV
+
+// S //
+
+dp22			10 011 aaa	SC<	op8(8)
+i8i80			10 011 aaa	SBC	A, op8(14/24)	\
+	i8i80:				SBB	op8(14/24)	\
+	z280:				SBC	[A], op8(14/24)	\
+	r800:				SUBC	.A, op8(14/24)	!FD>a=7
+
+dp22			00 011 100	SC	#	\
+	i8:				SCI	#
+i8i80			11 011 110	SBC	A, #	\
+	i8i80:				SBI	#	\
+	z280:				SBC	[A], #	\
+	r800:				SUBC	.A, #
+
+z80		ED	01 aa0 010	SBC	op16(1/3), op16(4/6)	\
+	r800:				SUBC	op16(1/3), op16(4/6)
+
+z380		ED	10 011 1aa	SBCW	HL, opx16(4)
+z380		*	10 011 111	SBCW	HL, op16(2)
+z380		*	11 011 110	SBCW	HL, mem16(2)
+
+z280		ED	01 110 001	SC	##
+
+i80			00 110 111	SCF	\
+	i80:				STC	\
+	r800:				SETC
+
+z80		CB	11 aaa bbb	SET	im, op8(10)
+!z80		CB	11 aaa bbb	*SET	im, mem16(2), op8(8)	!b=6
+z80n		CB	11 bbb aaa	=SET	op8(8), im, mem16(2)	!a=6
+
+z380		*	11 110 111	SETC	mode
+
+i85			11 011 001	*SHLX
+vm1	MB RS		11 011 001	SHLX
+
+!i85			00 110 000	SIM
+
+z80		CB	00 100 aaa	SLA	op8(10)	\
+	r800:				SHL[A]	op8(10)
+!z80		CB	00 100 aaa	*SLA	mem16(2), op8(8)	!a=6
+z80n		CB	00 100 aaa	=SLA	op8(8), mem16(2)	!a=6
+
+!r800		CB	00 110 aaa	~SHL[A]	op8(10)	// https://www.msx.org/wiki/R800
+
+z380		ED CB	00 100 aaa	SLAW	opx16(7)	!a=7
+z380		* CB	00 100 010	SLAW	mem16(2)
+
+!z80		CB	00 110 aaa	*SL1	op8(10)	\
+	+:				*SLI	op8(10)	\
+	+:				*SLL	op8(10)
+z80n		CB	00 110 aaa	=SL1	op8(10)	\
+	+:				=SLI	op8(10)
+!z80		CB	00 110 aaa	*SL1	mem16(2), op8(8)	\
+	+:				*SLI	mem16(2), op8(8)	\
+	+:				*SLL	mem16(2), op8(8)	!a=6
+z80n		CB	00 110 aaa	=SL1	op8(8), mem16(2)	\
+	+:				=SLI	op8(8), mem16(2)	!a=6
+
+z180		ED	01 110 110	SLP
+
+vm1		28	00 000 000	MB SMF0
+vm1		28	01 111 111	MB SMF1
+
+z80		CB	00 101 aaa	SRA	op8(10)	\
+	r800:				SHRA	op8(10)
+!z80		CB	00 101 aaa	*SRA	mem16(2), op8(8)	!a=6
+z80n		CB	00 101 aaa	=SRA	op8(8), mem16(2)	!a=6
+
+z380		ED CB	00 101 aaa	SRAW	opx16(7)	!a=7
+z380		* CB	00 101 010	SRAW	mem16(2)
+
+z80		CB	00 111 aaa	SRL	op8(10)	\
+	r800:				SHR	op8(10)
+!z80		CB	00 111 aaa	*SRL	mem16(2), op8(8)	!a=6
+z80n		CB	00 111 aaa	=SRL	op8(8), mem16(2)	!a=6
+
+z380		ED CB	00 111 aaa	SRLW	opx16(7)	!a=7
+z380		* CB	00 111 010	SRLW	mem16(2)
+
+ez80		ED	01 111 101	STMIX
+
+dp22			10 010 aaa	SU<	op8(8)
+i8i80			10 010 aaa	SUB	[A], op8(14/24)	\
+	i8i80:				SUB	op8(14/24)	\
+	z80:				SUB	op8(14/24)	\
+	z280:				SUB	[A], op8(14/24)	\
+	z380,ez80:			SUB	A, op8(14/24)	\
+	r800:				SUB	.A, op8(14/24)	!FD>a=7
+
+dp22			00 010 100	SU	#	\
+	i8:				SUI	#
+i8i80			11 010 110	SUB	[A], #	\
+	i8i80:				SUI	#	\
+	z80:				SUB	#	\
+	z280:				SUB	[A], #	\
+	z380,ez80:			SUB	A, #	\
+	r800:				SUB	.A, #
+
+z380	X	ED	11 010 110	SUB	HL, (##~)
+z380	X	ED	10 010 010	SUB	SP, ##~
+
+z280		ED	11 aa1 110	SUBW	[HL], op16(12)
+
+z380		ED	10 010 1aa	SUBW	[HL], opx16(4)
+z380		*	10 010 111	SUBW	[HL], op16(2)
+z380		*	11 010 110	SUBW	[HL], mem16(2)
+
+z380		ED	00 aa1 110	SWAP	opx16(3)
+z380		*	00 111 110	SWAP	op16(2)
+
+// T //
+
+z280		CB	00 110 aaa	TSET	op8(10)
+
+z180		ED	00 aaa 100	TST	op8(8)
+z180		ED	01 100 100	TST	#
+
+z180		ED	01 110 100	TSTIO	#
+
+// U //
+// V //
+// W //
+// X //
+
+dp22			10 101 aaa	XR<	op8(8)
+i8i80			10 101 aaa	XOR	op8(14/24)	\
+	i8i80:				XRA	op8(14/24)	\
+	z280,z380:			XOR	[A], op8(14/24)	\
+	ez80:				XOR	A, op8(14/24)	\
+	r800:				XOR	.A, op8(14/24)	!FD>a=7
+
+dp22			00 101 100	XR	#	\
+	i8:				XRI	#
+i8i80			11 101 110	XOR	#	\
+	i8i80:				XRI	#	\
+	z280,z380:			XOR	[A], #	\
+	ez80:				XOR	A, #	\
+	r800:				XOR	.A, #
+
+z380		ED	10 101 1aa	XORW	[HL], opx16(4)
+z380		*	10 101 111	XORW	[HL], op16(2)
+z380		*	11 101 110	XORW	[HL], mem16(2)
+
+vm1	MB RS		00 110 000	XRX
+
+// Y //
+// Z //
+// platform specific //
+
+z280		ED	10 011 111	EPUI	####
+
+z280		ED	10 010 111	EPUF	####
+
+z280		ED	10 100 110	EPUM	(HL), ####
+z280		ED	10 100 111	EPUM	(##), ####
+z280		ED	10 aaa 100	EPUM	opx16(8), ####
+
+z280		ED	10 101 110	MEPU	(HL), ####
+z280		ED	10 101 111	MEPU	(##), ####
+z280		ED	10 aaa 101	MEPU	opx16(8), ####
+
+^ez80			01 000 000	.SIS
+^ez80			01 001 001	.LIS
+^ez80			01 010 010	.SIL
+^ez80			01 011 011	.LIL
+
+sm83		CB	00 110 aaa	SWAP	op8(8)
+^sm83			00 001 000	LD	(##), SP
+^sm83			00 010 000	STOP	#
+^sm83			00 100 010	LDI	(HL), A	\
+	+:				LD	(HL+), A	\
+	+:				LD	(HLI), A
+^sm83			00 101 010	LDI	A, (HL)	\
+	+:				LD	A, (HL+)	\
+	+:				LD	A, (HLI)
+^sm83			00 110 010	LDD	(HL), A	\
+	+:				LD	(HL-), A	\
+	+:				LD	(HLD), A
+^sm83			00 111 010	LDD	A, (HL)	\
+	+:				LD	A, (HL-)	\
+	+:				LD	A, (HLD)
+^sm83			11 010 011	-
+^sm83			11 011 001	RETI
+^sm83			11 011 011	-
+^sm83			11 100 000	LDH	(#), A	\
+	+:				LD	(0FF00h+#), A
+^sm83			11 100 010	LD	(C), A	\
+	+:				LD	(0FF00h+C), A
+^sm83			11 100 011	-
+^sm83			11 100 100	-
+^sm83			11 101 000	ADD	SP, #
+^sm83			11 101 010	LD	(##), A
+^sm83			11 101 011	-
+^sm83			11 101 100	-
+^sm83			11 110 000	LDH	A, (#)	\
+	+:				LD	A, (0FF00h+#)
+^sm83			11 110 010	LD	A, (C)	\
+	+:				LD	A, (0FF00h+C)
+^sm83			11 110 100	-
+^sm83			11 111 000	LD	HL, SP+#	\
+	+:				LDHL	SP, #
+^sm83			11 111 010	LD	A, (##)
+^sm83			11 111 100	-
+// removing all ED prefixes
+^sm83		ED	01 aaa 00b	-	!a=6
+^sm83		ED	01 aaa 01b	-
+^sm83		ED	01 000 100	-
+^sm83		ED	01 00a 101	-
+^sm83		ED	01 0aa 110	-	!a=1
+^sm83		ED	01 aaa 111	-	!a=6,a=7
+^sm83		ED	10 1aa 0bb	-
+// ugly fixes to z80 overrides provided to accomodate new z280 addressing modes
+^sm83		FD	00 100 001	-
+^sm83		FD	11 100 001	-
+^sm83		FD	11 100 101	-
+
+!z80		DD	11 011 101	=>DD
+!z80		FD	11 011 101	=>DD
+!z80		DD	11 101 101	=>ED
+!z80		FD	11 101 101	=>ED
+!z80		DD	11 111 101	=>FD
+!z80		FD	11 111 101	=>FD
+
+!vm1		28	00 101 000	=>28
+!vm1		28 38	00 101 000	=>28
+!vm1		38	00 101 000	=>28
+!vm1		38	00 111 000	=>38
+!vm1		28 38	00 111 000	=>38
+
+z80n		ED	00 100 011	SWAPNIB	\
+	+:				SWAP
+z80n		ED	00 100 100	MIRROR	A	\
+	+:				MIRR
+z80n		ED	00 100 111	TEST	#
+z80n		ED	00 101 000	BSLA	DE, B
+z80n		ED	00 101 001	BSRA	DE, B
+z80n		ED	00 101 010	BSRL	DE, B
+z80n		ED	00 101 011	BSRF	DE, B
+z80n		ED	00 101 100	BRLC	DE, B
+z80n		ED	00 110 000	MUL	D, E
+z80n		ED	00 110 001	ADD	HL, A
+z80n		ED	00 110 010	ADD	DE, A
+z80n		ED	00 110 011	ADD	BC, A
+z80n		ED	00 110 100	ADD	HL, ##
+z80n		ED	00 110 101	ADD	DE, ##
+z80n		ED	00 110 110	ADD	BC, ##
+z80n		ED	10 001 010	PUSH	##	// big endian
+z80n		ED	10 010 000	OUTINB	\
+	+:				OTIB
+z80n		ED	10 010 001	NEXTREG	#, #	\
+	+:				NREG	#, #
+z80n		ED	10 010 010	NEXTREG	#, A	\
+	+:				NREG	#, A
+z80n		ED	10 010 011	PIXELDN	\
+	+:				PXDN
+z80n		ED	10 010 100	PIXELAD	\
+	+:				PXAD
+z80n		ED	10 010 101	SETAE	\
+	+:				STAE
+z80n		ED	10 011 000	JP	(C)
+z80n		ED	10 100 100	LDIX
+z80n		ED	10 100 101	LDWS
+z80n		ED	10 101 100	LDDX
+z80n		ED	10 110 100	LDIRX	\
+	+:				LIRX
+z80n		ED	10 110 111	LDPIRX	\
+	+:				LPRX
+z80n		ED	10 111 100	LDDRX	\
+	+:				LDRX
+
+z80n		DD	11 011 101	=>DD
+z80n		FD	11 011 101	=>DD
+z80n		DD	11 101 101	=>ED
+z80n		FD	11 101 101	=>ED
+z80n		DD	11 111 101	=>FD
+z80n		FD	11 111 101	=>FD
+
+^r2000			00 100 111	ADD	SP, #	// DAA
+^r2000			01 110 110	-	// HALT -> ALTD // TODO
+^r2000		76	01 110 110	=>76
+^r2000			11 110 011	RL	DE	// DI
+^r2000			11 111 011	RR	DE	// EI
+
+^r2000		ED	01 aaa 000	-	!a=6	//	IN	op8(8/24), (C)
+^r2000			11 011 011	IOE	//	IN	A, (#)
+//	r4000:				IOEP
+
+^r2000		ED	01 0aa 110	-	!a=1	//	IM	imode
+r2000		ED	01 0aa 110	IPSET	ipset
+//	r4000:				IP	ipset
+
+^r2000		ED	01 aaa 001	-	!a=6	//	OUT	(C), op8(8/24)
+^r2000			11 010 011	IOI	//	OUT	(#), A
+//	r4000:				IOIP
+r2000		ED	01 aa1 001	LD	op16(4)', BC	!a=3
+r2000		ED	01 aa0 001	LD	op16(4)', DE	!a=3
+
+^r2000		ED	01 100 111	LD	XPC, A	//	RRD
+r2000		ED	01 110 111	LD	A, XPC
+^r2000		ED	01 101 111	-	//	RLD
+
+^r2000		ED	10 1aa 010	-	//	IN{I}{R}	str
+^r2000		ED	10 1aa 011	-	//	O{U}T{I}{R}	str
+^r2000		ED	10 1aa 001	-	//	CP{I}{R}	str
+
+^r2000			11 000 111	LJP	###	//	RST	0x00	// not all
+^r2000			11 001 111	LCALL	###	//	RST	0x08
+^r2000			11 110 111	MUL	//	RST	0x30	// not all
+
+^r2000			11 aaa 100	-	//	CALL	cnd(8), trg(1/3)
+r2000			11 000 100	LD	op16(3), (SP+#)
+r2000			11 001 100	BOOL	op16(3)
+r2000			11 010 100	LD	(SP+#), op16(3)
+r2000			11 011 100	AND	op16(3), DE
+r2000			11 100 100	LD	HL, (IX+#)
+r2000		DD	11 100 100	LD	HL, (HL+#)
+r2000		FD	11 100 100	LD	HL, (IY+#)
+r2000			11 101 100	OR	op16(3), DE
+r2000			11 110 100	LD	(IX+#), HL
+r2000		DD	11 110 100	LD	(HL+#), HL
+r2000		FD	11 110 100	LD	(IY+#), HL
+r2000			11 111 100	RR	op16(3)
+
+^r2000			11 100 011	EX	DE', HL	//	EX	(SP), op16(3)
+r2000		ED	01 010 100	EX	(SP), HL
+
+r2000		76	11 101 011	EX	DE, HL'
+r2000		76	11 100 011	EX	DE', HL'
+
+r2000		ED	01 011 101	IPRES
+
+r2000		ED	01 100 100	LDP	(HL), HL
+r2000		DD	01 100 100	LDP	(IX), HL
+r2000		FD	01 100 100	LDP	(IY), HL
+
+r2000		ED	01 100 101	LDP	(##), HL
+r2000		DD	01 100 101	LDP	(##), IX
+r2000		FD	01 100 101	LDP	(##), IY
+
+r2000		ED	01 101 100	LDP	HL, (HL)
+r2000		DD	01 101 100	LDP	HL, (IX)
+r2000		FD	01 101 100	LDP	HL, (IY)
+
+r2000		ED	01 101 101	LDP	HL, (##)
+r2000		DD	01 101 101	LDP	IX, (##)
+r2000		FD	01 101 101	LDP	IY, (##)
+
+^r2000		ED	01 000 101	LRET	//	RETN
+
+r2000		ED	01 111 110	POP	IP
+r2000		ED	01 110 110	PUSH	IP
+
+r2000		DD	01 111 100	LD	HL, IX
+r2000		FD	01 111 100	LD	HL, IY
+
+r2000		DD	01 111 101	LD	IX, HL
+r2000		FD	01 111 101	LD	IY, HL
+
+// TODO: ALTD: prefix all instructions with ALTD, except LD
+
+r3000		ED	01 100 110	PUSH	SU
+r3000		ED	01 101 110	POP	SU
+r3000		ED	01 101 111	SETUSR
+r3000		ED	01 110 101	SYSCALL
+r3000		ED	01 111 101	SURES
+r3000		ED	01 111 111	RDMODE
+
+r3000		ED	10 010 000	LDISR
+r3000		ED	10 011 000	LDDSR
+
+r3000		ED	11 000 000	UMA
+r3000		ED	11 001 000	UMS
+
+r3000		ED	11 010 000	LSIDR
+r3000		ED	11 011 000	LSDDR
+
+r3000		ED	11 110 000	LSIR
+r3000		ED	11 111 000	LSDR
+
+^r4000			01 0aa 0bb	-
+^r4000			01 0aa 10b	-
+^r4000			01 10a 0bb	-
+^r4000			01 10a 10b	-
+^r4000			01 111 111	-
+
+^r4000			10 aaa aaa	-	!a=47,a=55
+
+r4000			01 000 010	RL	HL
+r4000			01 000 101	SUB	HL, JK
+
+r4000			01 001 000	CP	HL, #
+r4000			01 001 100	TEST	HL
+r4000			01 001 101	NEG	HL
+
+r4000			01 010 000	RLC	DE
+r4000			01 010 001	RRC	DE
+r4000			01 010 100	XOR	HL, DE
+r4000			01 010 101	SUB	HL, DE
+
+r4000			01 011 011	LD	E, E
+
+r4000			01 100 000	RLC	BC
+r4000			01 100 001	RRC	BC
+r4000			01 100 010	RL	BC
+r4000			01 100 011	RR	BC
+r4000			01 100 101	ADD	HL, JK
+
+r4000			10 000 001	LD	HL, BC
+r4000			10 000 010	LDF	(###), HL
+r4000			10 000 011	LD	(##), BCDE
+r4000			10 000 100	LD	(##), JKHL
+r4000			10 aa0 101	LD	HL, (op32(4)+#)
+r4000			10 aa0 110	LD	(op32(4)+#), HL
+r4000			10 000 111	LLJP	####
+
+r4000			10 001 001	LD	(##), JK
+r4000			10 001 010	LDF	(###), A
+r4000			10 aa1 011	LD	A, (op32(4)+HL)
+r4000			10 aa1 100	LD	(op32(4)+HL), A
+r4000			10 aa1 101	LD	A, (op32(4)+#)
+r4000			10 aa1 110	LD	(op32(4)+#), A
+r4000			10 001 111	LLCALL	####
+
+r4000			10 010 001	LD	BC, HL
+r4000			10 010 010	LDF	HL, (###)
+r4000			10 010 011	LD	BCDE, (##)
+r4000			10 010 100	LD	JKHL, (##)
+r4000			10 010 111	LD	XPC, HL
+
+r4000			10 011 000	JRE	PC+##
+r4000			10 011 001	LD	JK, (##)
+r4000			10 011 010	LDF	A, (###)
+r4000			10 011 111	LD	HL, XPC
+
+r4000			10 1aa 000	JR	cndx(4), PC+#
+r4000			10 100 001	LD	HL, DE
+r4000			10 1aa 010	JP	cndx(4), ##
+r4000			10 100 011	LD	BCDE, #
+r4000			10 100 100	LD	JKHL, #
+r4000			10 100 111	MULU
+
+r4000			10 101 001	LD	JK, ##
+
+r4000			10 110 001	LD	DE, HL
+r4000			10 110 011	EX	BC, HL
+r4000			10 110 100	EX	JKHL, BCDE
+
+r4000			10 111 001	EX	JK, HL
+r4000			10 111 111	CLR	HL
+
+r4000		ED	00 000 000	CBM	#
+r4000		ED	00 aa0 001	LD	op32(4), (HTR+HL)
+r4000		ED	00 000 010	SBOX	A
+r4000		ED	00 aa0 011	LDL	op32(4), (SP+#)
+r4000		ED	00 aa0 100	LD	op32(4), (SP+#)
+r4000		ED	00 aa0 101	LD	(SP+#), op32(4)
+r4000		ED	00 aa0 110	LD	HL, (op32(4)+BC)
+r4000		ED	00 aa0 111	LD	(op32(4)+BC), HL
+
+r4000		ED	00 aa1 000	LDF	(###), op32(4)
+r4000		ED	00 aa1 001	LDF	op32(4), (###)
+r4000		ED	00 aa1 010	LDF	(###), opy16(4)
+r4000		ED	00 aa1 011	LDF	opy16(4), (###)
+r4000		ED	00 aa1 100	LD	op32(4), ####
+r4000		ED	00 aa1 101	LDL	op32(4), ##
+r4000		ED	00 aa1 110	CONVC	op32(4)
+r4000		ED	00 aa1 111	CONVD	op32(4)
+
+r4000		ED	00 010 000	DWJNZ	PC+#
+r4000		ED	00 010 010	IBOX	A
+
+r4000		ED	01 000 000	LD	HTR, A
+
+r4000		ED	01 001 000	CP	HL, DE
+r4000		ED	01 001 100	TEST	BC
+
+r4000		ED	01 010 000	LD	A, HTR
+
+r4000		ED	01 011 000	CP	JKHL, BCDE
+
+r4000		ED	01 010 101	FSYSCALL
+
+r4000		ED	01 110 100	EX	BC', HL
+
+r4000		ED	01 111 100	EX	JK', HL
+
+r4000		ED	10 000 000	COPY
+r4000		ED	10 000 011	SYSRET
+
+r4000		ED	10 001 000	COPYR
+r4000		ED	10 001 011	LLRET
+
+r4000		ED	10 1aa 010	LLJP	cndx(4), ####
+r4000		ED	10 1aa 011	JRE	cndx(4), PC+#
+r4000		ED	10 1aa 100	FLAG	cndx(4), HL
+r4000		ED	10 100 101	PUSH	##
+
+r4000		ED	10 110 001	SETSYSP	##
+r4000		ED	10 110 101	SETUSRP	##
+
+r4000		ED	11 aa0 001	POP	op32(4)
+r4000		ED	11 0aa 010	LLJP	cnd(4), ####
+r4000		ED	11 0aa 011	JRE	cnd(4), PC+#
+r4000		ED	11 0aa 100	FLAG	cnd(4), HL
+r4000		ED	11 aa0 101	PUSH	op32(4)
+r4000		ED	11 000 110	ADD	JKHL, BCDE
+
+r4000		ED	11 010 110	SUB	JKHL, BCDE
+
+r4000		ED	11 011 001	EXP
+
+r4000		ED	11 100 110	AND	JKHL, BCDE
+
+r4000		ED	11 101 010	CALL	(HL)
+r4000		ED	11 101 110	XOR	JKHL, BCDE
+
+r4000		ED	11 110 110	OR	JKHL, BCDE
+
+r4000		ED	11 111 010	LLCALL	(JKHL)
+r4000		ED	11 111 110	LD	HL, (SP+HL)
+
+r4000			00 000 110	LD	A, (op16(2)+A)
+
+r4000			00 001 010	LDF	op32(2), (###)
+r4000			00 001 011	LDF	(###), op32(2)
+r4000			00 aa1 100	LD	op32(2), (op32(4)+HL)
+r4000			00 aa1 101	LD	(op32(4)+HL), op32(2)
+r4000			00 aa1 110	LD	op32(2), (op32(4)+#)
+r4000			00 aa1 111	LD	(op32(4)+#), op32(2)
+
+r4000			00 011 010	LD	op32(2), (HL)
+r4000			00 011 011	LD	(HL), op32(2)
+
+r4000			01 001 000	RLC	1, op32(2)
+r4000			01 001 001	RLC	2, op32(2)
+r4000			01 001 011	RLC	4, op32(2)
+r4000			01 001 100	TEST	op16(2)
+r4000			01 001 101	NEG	op32(2)
+r4000			01 001 111	RLB	op32(2)
+
+r4000			01 011 000	RRC	1, op32(2)
+r4000			01 011 001	RRC	2, op32(2)
+r4000			01 011 011	RRC	4, op32(2)
+r4000			01 011 100	TEST	op32(2)
+r4000			01 011 111	RRB	op32(2)
+
+r4000			01 101 000	RL	1, op32(2)
+r4000			01 101 001	RL	2, op32(2)
+r4000			01 101 011	RL	4, op32(2)
+r4000			01 101 111	RL	8, op32(2)
+
+r4000			01 111 000	RR	1, op32(2)
+r4000			01 111 001	RR	2, op32(2)
+r4000			01 111 011	RR	4, op32(2)
+r4000			01 111 111	RR	8, op32(2)
+
+r4000			10 001 000	SLA	1, op32(2)
+r4000			10 001 001	SLA	2, op32(2)
+r4000			10 001 011	SLA	4, op32(2)
+r4000			10 aa1 100	LDL	op32(4), op16(2)
+r4000			10 aa1 101	LD	op32(4), op32(2)
+r4000		DD	10 aa1 111	LDL	op32(4), DE
+r4000		FD	10 aa1 111	LDL	op32(4), HL
+
+r4000			10 011 000	SRA	1, op32(2)
+r4000			10 011 001	SRA	2, op32(2)
+r4000			10 011 011	SRA	4, op32(2)
+
+r4000			10 101 000	SLL	1, op32(2)
+r4000			10 101 001	SLL	2, op32(2)
+r4000			10 101 011	SLL	4, op32(2)
+
+r4000			10 111 000	SRL	1, op32(2)
+r4000			10 111 001	SRL	2, op32(2)
+r4000			10 111 011	SRL	4, op32(2)
+
+r4000			11 aa1 101	LD	op32(2), op32(4)
+r4000			11 aa1 110	LD	op32(2), (op32(4)+#)
+r4000			11 aa1 111	LD	(op32(4)+#), op32(2)
+
+r4000			11 101 010	CALL	(op16(2))
+
+r4000			11 110 001	POP	op32(2)
+r4000			11 110 101	PUSH	op32(2)
+
+r4000		7F	01 aaa bbb	LD	op8(8), op8(8)	!a=6,b=6
+
+r4000		7F	10 001 aaa	ADC	A, op8(8)
+r4000		7F	10 000 aaa	ADD	A, op8(8)
+r4000		7F	10 100 aaa	AND	op8(8)
+r4000		7F	10 111 aaa	CP	op8(8)
+r4000		7F	10 110 aaa	OR	op8(8)
+r4000		7F	10 101 aaa	XOR	op8(8)
+r4000		7F	10 011 aaa	SBC	A, op8(8)
+r4000		7F	10 010 aaa	SUB	op8(8)
+
+r4000		6D	aa bb0 000	LD	opy16(4), (op32(4)+#)
+r4000		6D	bb aa0 001	LD	(op32(4)+#), opy16(4)
+r4000		6D	aa bb0 010	LD	opy16(4), (op32(4)+HL)
+r4000		6D	bb aa0 011	LD	(op32(4)+HL), opy16(4)
+r4000		6D	aa bb0 100	LD	op32(4), op32(4)+IX
+r4000		6D	aa bb0 101	LD	op32(4), op32(4)+IY
+r4000		6D	aa bb0 110	LD	op32(4), op32(4)+DE
+r4000		6D	aa bb0 111	LD	op32(4), op32(4)
+r4000		6D	aa bb1 000	LD	op32(4), (op32(4)+#)
+r4000		6D	bb aa1 001	LD	(op32(4)+#), op32(4)
+r4000		6D	aa bb1 010	LD	op32(4), (op32(4)+HL)
+r4000		6D	bb aa1 011	LD	(op32(4)+HL), op32(4)
+r4000		6D	aa bb1 100	LD	op32(4), op32(4)+#
+r4000		6D	aa bb1 110	LD	op32(4), op32(4)+HL
+r4000		6D	01 101 101	LD	L, L
+r4000		6D	01 111 111	LD	A, A
+
+r6000			01 000 000	ALTS
+r6000			01 000 011	JP	??, ##	// TODO: condition
+r6000			01 000 100	EX	JKHL, BCDE'
+r6000			01 001 011	JP	??, ##	// TODO: condition
+r6000			01 010 011	JP	??, ##	// TODO: condition
+r6000			01 011 001	MUL	HL, DE
+r6000			01 100 100	ALTSD
+r6000			01 101 001	MULU	HL, DE
+r6000			10 000 000	JR	??, PC+#	// TODO: condition
+r6000			10 001 000	JR	??, PC+#	// TODO: condition
+r6000			10 010 000	JR	??, PC+#	// TODO: condition
+r6000		49	00 000 0aa	ADD	JKHL, op32(4)
+r6000		49	00 000 1aa	ADD	A, (op32(4)+#)
+r6000		49	00 001 0aa	ADD	HL, (op32(4)+#)
+r6000		49	00 001 1aa	ADD	JKHL, (op32(4)+#)
+r6000		49	00 010 0aa	ADC	JKHL, op32(4)
+r6000		49	00 010 1aa	ADC	A, (op32(4)+#)
+r6000		49	00 011 0aa	ADC	HL, (op32(4)+#)
+r6000		49	00 011 1aa	ADC	JKHL, (op32(4)+#)
+r6000		49	00 100 0aa	SUB	JKHL, op32(4)
+r6000		49	00 100 1aa	SUB	A, (op32(4)+#)
+r6000		49	00 101 0aa	SUB	HL, (op32(4)+#)
+r6000		49	00 101 1aa	SUB	JKHL, (op32(4)+#)
+r6000		49	00 110 0aa	SBC	JKHL, op32(4)
+r6000		49	00 110 1aa	SBC	A, (op32(4)+#)
+r6000		49	00 111 0aa	SBC	HL, (op32(4)+#)
+r6000		49	00 111 1aa	SBC	JKHL, (op32(4)+#)
+r6000		49	01 000 0aa	AND	JKHL, op32(4)
+r6000		49	01 000 1aa	AND	A, (op32(4)+#)
+r6000		49	01 001 0aa	AND	HL, (op32(4)+#)
+r6000		49	01 001 1aa	AND	JKHL, (op32(4)+#)
+r6000		49	01 010 0aa	XOR	JKHL, op32(4)
+r6000		49	01 010 1aa	XOR	A, (op32(4)+#)
+r6000		49	01 011 0aa	XOR	HL, (op32(4)+#)
+r6000		49	01 011 1aa	XOR	JKHL, (op32(4)+#)
+r6000		49	01 100 0aa	OR	JKHL, op32(4)
+r6000		49	01 100 1aa	OR	A, (op32(4)+#)
+r6000		49	01 101 0aa	OR	HL, (op32(4)+#)
+r6000		49	01 101 1aa	OR	JKHL, (op32(4)+#)
+r6000		49	01 110 0aa	CP	JKHL, op32(4)
+r6000		49	01 110 1aa	CP	A, (op32(4)+#)
+r6000		49	01 111 0aa	CP	HL, (op32(4)+#)
+r6000		49	01 111 1aa	CP	JKHL, (op32(4)+#)
+r6000		49	10 001 001	ADD	A, (SP+#)
+r6000		49	10 001 010	ADD	HL, (SP+#)
+r6000		49	10 001 011	ADD	JKHL, (SP+#)
+r6000		49	1a aa1 100	SL<	(8)REG
+r6000		49	1a aa1 101	RL<	(8)REG
+r6000		49	1a aa1 110	SR<	(8)REG
+r6000		49	1a aa1 111	RR<	(8)REG
+r6000		49	10 010 000	PLDISR
+r6000		49	10 011 000	PLDDSR
+r6000		49	10 011 001	ADC	A, (SP+#)
+r6000		49	10 011 010	ADC	HL, (SP+#)
+r6000		49	10 011 011	ADC	JKHL, (SP+#)
+r6000		49	10 100 000	PLDI
+r6000		49	10 100 1aa	INC	(op32(4)+#)
+r6000		49	10 101 000	PLDD
+r6000		49	10 101 001	SUB	A, (SP+#)
+r6000		49	10 101 010	SUB	HL, (SP+#)
+r6000		49	10 101 011	SUB	JKHL, (SP+#)
+r6000		49	10 110 000	PLDIR
+r6000		49	10 110 1aa	DEC	(op32(4)+#)
+r6000		49	10 111 000	PLDDR
+r6000		49	10 111 001	SBC	A, (SP+#)
+r6000		49	10 111 010	SBC	HL, (SP+#)
+r6000		49	10 111 011	SBC	JKHL, (SP+#)
+r6000		49	11 000 000	PUMA
+r6000		49	11 000 010	SHAF1
+r6000		49	11 000 011	MD5F1
+r6000		49	11 001 000	PUMS
+r6000		49	11 001 001	AND	A, (SP+#)
+r6000		49	11 001 010	AND	HL, (SP+#)
+r6000		49	11 001 011	AND	JKHL, (SP+#)
+r6000		49	11 010 000	PLSIDR
+r6000		49	11 010 010	SHAF2
+r6000		49	11 010 011	MD5F2
+r6000		49	11 011 000	PLSDDR
+r6000		49	11 011 001	XOR	A, (SP+#)
+r6000		49	11 011 010	XOR	HL, (SP+#)
+r6000		49	11 011 011	XOR	JKHL, (SP+#)
+r6000		49	11 100 010	SHAF3
+r6000		49	11 100 011	MD5F3
+r6000		49	11 101 001	OR	A, (SP+#)
+r6000		49	11 101 010	OR	HL, (SP+#)
+r6000		49	11 101 011	OR	JKHL, (SP+#)
+r6000		49	11 110 000	PLSIR
+r6000		49	11 111 000	PLSDR
+r6000		49	11 111 001	CP	A, (SP+#)
+r6000		49	11 111 010	CP	HL, (SP+#)
+r6000		49	11 111 011	CP	JKHL, (SP+#)
+r6000		6D	aa 001 101	INC	op32(4)
+r6000		6D	aa 001 111	DEC	op32(4)
+r6000		6D	aa 011 101	SBOX	op32(4)
+r6000		6D	aa 011 111	IBOX	op32(4)
+r6000		CB	00 110 aaa	LD	op8(8), op8(8)	!a=6
+r6000		DD	00 110 010	SWAP	BCDE
+r6000		FD	00 110 010	SWAP	JKHL
+r6000			10 000 000	ADD	HL, mem16(2)
+r6000			10 000 001	ADC	HL, mem16(2)
+r6000			10 000 010	ADD	JKHL, mem16(2)
+r6000			10 000 011	ADC	JKHL, mem16(2)
+r6000			10 010 000	SUB	HL, mem16(2)
+r6000			10 010 001	SBC	HL, mem16(2)
+r6000			10 010 010	SUB	JKHL, mem16(2)
+r6000			10 010 011	SBC	JKHL, mem16(2)
+r6000			10 100 000	AND	HL, mem16(2)
+r6000			10 100 001	XOR	HL, mem16(2)
+r6000			10 100 010	AND	JKHL, mem16(2)
+r6000			10 100 011	XOR	JKHL, mem16(2)
+r6000			10 110 000	OR	HL, mem16(2)
+r6000			10 110 001	CP	HL, mem16(2)
+r6000			10 110 010	OR	JKHL, mem16(2)
+r6000			10 110 011	CP	JKHL, mem16(2)
+r6000			11 000 101	ADD	op16(2), #
+r6000		ED	01 011 100	TEST	DE
+r6000		ED	01 110 001	LD	SP', DE
+r6000		ED	01 111 001	LD	SP', BC
+r6000		ED	10 aa0 110	TSTNULL	op32(4)
+r6000		ED	1a aa0 111	SWAP	op8(8)	!a=6
+r6000		ED	10 aa1 110	CNVC	op32(4)
+r6000		ED	10 aa1 111	CNVD	op32(4)
+r6000		ED	10 011 010	LLJP	??, ####	// TODO: condition
+r6000		ED	10 011 011	JRE	??, PC+#	// TODO: condition
+r6000		ED	10 011 100	FLAG	??, HL	// TODO: condition
+r6000		ED	11 001 110	ADC	JKHL, BCDE
+r6000		ED	11 aa1 111	SWAP	op16(4)	!a=3
+r6000		ED	11 011 110	SBC	JKHL, BCDE
+r6000		ED	11 100 010	LLJP	??, ####	// TODO: condition
+r6000		ED	11 100 011	JRE	??, PC+#	// TODO: condition
+r6000		ED	11 100 100	FLAG	??, HL	// TODO: condition
+r6000		ED	11 110 010	LLJP	??, ####	// TODO: condition
+r6000		ED	11 110 011	JRE	??, PC+#	// TODO: condition
+r6000		ED	11 110 100	FLAG	??, HL	// TODO: condition
+r6000		ED	11 111 111	SWAP	JK
+
+// TODO: check Rabbit displacement sizes
+
+// Note: These are added to the x86 architecture, not the i80 architecture
+//v20		0F	11 111 111	BRKEM	#
+//upd9002		0F	11 111 111	BRKEM	#
+//upd9002		0F	11 111 110	BRKFEM	#	// undocumented, likely emulates system mode z80
+
+$DESCRIPTIONS
+
+= dp22
+year:1970
+name:Datapoint 2200
+fullname:CTC Datapoint 2200 Version I
+
+>Created by Datapoint Corporation as a terminal.
+
+key:Address space
+value:14-bit
+
+key:Stack size
+value:8 14-bit entries
+
+reg:A
+field:A
+offset:1
+
+reg:B,C
+field:C
+field:B
+
+reg:D,E
+field:E
+field:D
+
+reg:H,L
+field:L
+field:H
+
+reg:PC
+field:PC
+width:2
+times:8
+
+end:table
+
+reg:F
+field:C
+field:P
+field:Z
+field:S
+
+end:table
+
+= dp22v2
+year:1972
+name:Datapoint 2200 Version II
+fullname:CTC Datapoint 2200 Version II
+
+>Compatible extension of the #dp22#.
+
+key:Address space
+value:14-bit
+
+key:Stack size
+value:16 14-bit entries
+
+reg:A
+field:A
+offset:1
+next:A'
+
+reg:A'
+field:A'
+offset:1
+
+reg:B,C
+field:C
+field:B
+next:B',C'
+
+reg:B',C'
+field:C'
+field:B'
+
+reg:D,E
+field:E
+field:D
+next:D',E'
+
+reg:D',E'
+field:E'
+field:D'
+
+reg:H,L
+field:L
+field:H
+next:H',L'
+
+reg:H',L'
+field:L'
+field:H'
+
+reg:PC
+field:PC
+width:2
+times:16
+
+end:table
+
+reg:F
+field:C
+field:P
+field:Z
+field:S
+next:F'
+
+reg:F'
+field:C'
+field:P'
+field:Z'
+field:S'
+
+end:table
+
+= i8
+year:1972
+name:Intel 8008
+
+>Compatible extension of the #dp22#, created to be its CPU, it was not used in the end.
+
+key:Address space
+value:14-bit
+key:I/O space
+value:5-bit
+key:Stack size
+value:8 14-bit entries
+
+//= i8i80
+
+= i80
+year:1974
+name:Intel 8080
+
+>A source code but not binary code compatible extension of the #i8#, almost all instructions have a one-to-one mapping. The input/output instructions are now encoded as 2 bytes, and take up a single slot in the operation code table.
+
+key:Address space
+value:16-bit
+key:I/O space
+value:8-bit
+
+reg:PSW
+field:F
+field:A
+
+reg:B
+field:C
+field:B
+
+reg:D
+field:E
+field:D
+
+reg:H
+field:L
+field:H
+
+reg:SP
+field:SP
+width:2
+
+reg:PC
+field:PC
+width:2
+
+end:table
+
+reg:F
+field:C
+field:1
+style:unalterable
+field:P
+field:0
+style:unalterable
+field:AC
+field:0
+style:unalterable
+field:Z
+field:S
+next:IE
+
+reg:IE
+field:IE
+
+end:table
+
+= i85
+year:1976
+name:Intel 8085
+//year:????
+name:Tundra CA80C85B
+
+>Compatible extension of the #i80#. Many new instructions and 2 new flags, most undocumented.
+
+key:Address space
+value:16-bit
+key:I/O space
+value:8-bit
+
+reg:F
+field:C
+field:V
+style:undocumented
+field:P
+field:0
+style:unalterable
+field:AC
+field:UI
+style:undocumented
+field:Z
+field:S
+next:IE
+
+reg:IE
+field:IE
+
+end:table
+
+= z80
+year:1976
+name:Zilog Z80
+
+>Mostly compatible with the #i80#, with many new flags, registers, instructions, and extended behavior of some instructions and flags.
+
+key:Address space
+value:16-bit
+key:I/O space
+value:16-bit (8-bit documented)
+
+reg:AF
+field:F
+field:A
+next:AF'
+
+reg:AF'
+field:F'
+field:A'
+
+reg:BC
+field:C
+field:B
+next:BC'
+
+reg:BC'
+field:C'
+field:B'
+
+reg:DE
+field:E
+field:D
+next:DE'
+
+reg:DE'
+field:E'
+field:D'
+
+reg:HL
+field:L
+field:H
+next:HL'
+
+reg:HL'
+field:L'
+field:H'
+
+reg:IX
+field:IXL
+style:undocumented
+field:IXH
+style:undocumented
+
+reg:IY
+field:IYL
+style:undocumented
+field:IYH
+style:undocumented
+
+reg:SP
+field:SP
+width:2
+
+reg:PC
+field:PC
+width:2
+
+reg:I
+field:I
+offset:1
+
+reg:R
+field:R
+
+end:table
+
+reg:F
+field:C
+field:N
+field:P/V
+field:X3
+style:undocumented
+field:H
+field:X5
+style:undocumented
+field:Z
+field:S
+next:IE1
+
+reg:IE1
+field:IE1
+next:IE2
+
+reg:IE2
+field:IE2
+
+end:table
+
+= i86
+year:1978
+name:Intel 8086
+
+>A 16-bit architecture, incompatible with the #i80#, but claimed to be source code compatible, with a lot of similarities in its design. Later extensions included the #v20# and #upd9002#, the Intel 80286, Intel 80386 and the 64-bit AMD64.
+
+key:Address space
+value:20-bit
+key:I/O space
+value:16-bit
+
+// TODO: registers
+
+= z8000
+year:1979
+name:Zilog Z8000
+
+>Incompatible 16-bit architecture produced by Zilog and used together with the #z800#. They were also supposed to share a floating point coprocessor, the Z8070. It came in the form of a segmented Zilog Z8001, a non-segmented 16-bit Zilog Z8002, and a later updated 32-bit Zilog Z80000.
+
+key:Address space
+value:16-bit for the Z8002, 23-bit for the Z8001 with 7-bit segment numbers
+key:I/O space
+value:16-bit
+
+// TODO: registers
+
+= v20
+year:1982
+name:NEC V20
+fullname:NEC V20 8080 Emulation Mode
+
+>Mostly compatible extension of the #i86#, with added #i80# emulation. The following table lists the instructions in the 8080 Emulation Mode.
+
+key:Address space
+value:20-bit
+key:Emulation address space
+value:16-bit
+key:I/O space
+value:16-bit
+key:Operation modes
+value:Native mode (8086 compatible) vs emulation mode (8080 compatible)
+
+// TODO: registers
+
+= z180
+year:1985
+name:Hitach HD64180
+//year:????
+name:Zilog Z180
+
+>Mostly compatible extension of the #z80# developed in collaboration between Hitachi and Zilog.
+
+key:Physical address space
+value:20-bit
+key:Virtual address space
+value:16-bit
+key:I/O space
+value:16-bit
+
+reg:F
+field:C
+field:N
+field:P/V
+field:1
+style:unalterable
+field:H
+field:1
+style:unalterable
+field:Z
+field:S
+next:IE1
+
+reg:IE1
+field:IE1
+next:IE2
+
+reg:IE2
+field:IE2
+
+end:table
+
+= z280
+ref:z800
+year:1985
+name:Zilog Z800
+ref:z280
+year:1987
+name:Zilog Z280
+
+>Mostly compatible extension of the #z80#, released first as the Z800, later as the Z280. It was first intended as a coprocessor to the incompatible #z8000#, and could use its never released floating coprocessor, the Zilog Z8070.
+
+key:Physical address space
+value:24-bit
+key:Virtual address space
+value:16-bit
+key:I/O space
+value:16-bit
+key:Operation modes
+value:System mode (privileged) vs user mode
+
+reg:AF
+field:F
+field:A
+next:AF'
+
+reg:AF'
+field:F'
+field:A'
+
+reg:BC
+field:C
+field:B
+next:BC'
+
+reg:BC'
+field:C'
+field:B'
+
+reg:DE
+field:E
+field:D
+next:DE'
+
+reg:DE'
+field:E'
+field:D'
+
+reg:HL
+field:L
+field:H
+next:HL'
+
+reg:HL'
+field:L'
+field:H'
+
+reg:IX
+field:IXL
+field:IXH
+
+reg:IY
+field:IYL
+field:IYH
+
+reg:USP
+field:USP
+width:2
+next:SSP
+
+reg:SSP
+field:SSP
+width:2
+
+reg:PC
+field:PC
+width:2
+
+reg:I
+field:I
+offset:1
+
+reg:R
+field:R
+
+end:table
+
+reg:F
+field:C
+field:N
+field:P/V
+field:0
+style:unalterable
+field:H
+field:0
+style:unalterable
+field:Z
+field:S
+
+end:table
+
+= upd9002
+year:1987
+name:NEC µPD9002
+
+>Compatible extension of the #v20#, it replaced the #i80# emulation with a full #z80# system emulation. It was used in the NEC PC-88 VA home computer. Extent of Z80 compatibility not known.
+
+key:Address space
+value:20-bit
+key:Emulation address space
+value:Two segments of 16-bit
+key:I/O space
+value:16-bit
+key:Operation modes
+value:Native mode (8086 compatible) vs emulation mode (Z80 compatible), probably also application vs full system emulation
+
+// TODO: registers
+
+= sm83
+year:1989
+name:Sharp SM83 (LR35902)
+
+>Almost compatible extension of the #i80# and #z80#, used as the CPU in the Nintendo GameBoy, it changed a few instructions and added some others.
+
+key:Address space
+value:16-bit
+
+reg:F
+field:0
+style:unalterable
+field:0
+style:unalterable
+field:0
+style:unalterable
+field:0
+style:unalterable
+field:C
+field:H
+field:N
+field:Z
+next:IE
+
+reg:IE
+field:IE
+
+end:table
+
+= vm1
+year:1989
+name:KR580VM1 (КР580ВМ1)
+
+>Created in the USSR by the State Committee for Electronics Technology; Ministry of Electronics Industry, it is mostly compatible with the #i80# and includes some of the undocumented instructions from the #i85#.
+
+key:Address space
+value:Two banks of 16-bit
+key:I/O space
+value:8-bit
+
+reg:PSW
+field:F
+field:A
+
+reg:B
+field:C
+field:B
+
+reg:D
+field:E
+field:D
+
+reg:H
+field:L
+field:H
+next:H1
+
+reg:H1
+field:L1
+field:H1
+
+reg:SP
+field:SP
+width:2
+
+reg:PC
+field:PC
+width:2
+
+end:table
+
+reg:F
+field:C
+field:1
+style:unalterable
+field:P
+field:MF
+field:AC
+field:OF
+field:Z
+field:S
+next:IE
+
+reg:IE
+field:IE
+
+end:table
+
+= r800
+year:1990
+name:ASCII R800
+
+>Mostly compatible extension of the #z80#.
+
+key:Address space
+value:16-bit
+key:I/O space
+value:16-bit
+
+= z380
+year:1994
+name:Zilog Z380
+
+>Mostly compatible extension of the #z180#.
+
+key:Address space
+value:32-bit
+key:I/O space
+value:32-bit
+key:Operation modes
+value:Native vs extended mode; word vs long word mode
+
+reg:AF
+field:F
+field:A
+next:AF'
+
+reg:AF'
+field:F'
+field:A'
+times:4
+
+reg:BC
+field:C
+field:B
+field:BCz
+width:2
+style:inaccessible
+next:BC'
+
+reg:BC'
+field:C'
+field:B'
+field:BCz'
+width:2
+style:inaccessible
+times:4
+
+reg:DE
+field:E
+field:D
+field:DEz
+width:2
+style:inaccessible
+next:DE'
+
+reg:DE'
+field:E'
+field:D'
+field:DEz'
+width:2
+style:inaccessible
+times:4
+
+reg:HL
+field:L
+field:H
+field:HLz
+width:2
+style:inaccessible
+next:HL'
+
+reg:HL'
+field:L'
+field:H'
+field:HLz'
+width:2
+style:inaccessible
+times:4
+
+reg:IX
+field:IXL
+field:IXU
+field:IXz
+width:2
+style:inaccessible
+next:IX'
+
+reg:IX'
+field:IXL'
+field:IXU'
+field:IXz'
+width:2
+style:inaccessible
+times:4
+
+reg:IY
+field:IYL
+field:IYU
+field:IYz
+width:2
+style:inaccessible
+next:IY'
+
+reg:IY'
+field:IYL'
+field:IYU'
+field:IYz'
+width:2
+style:inaccessible
+times:4
+
+reg:SP
+field:SP
+width:2
+field:SPz
+width:2
+style:inaccessible
+
+reg:PC
+field:PC
+width:2
+field:PCz
+width:2
+style:inaccessible
+
+reg:I
+field:I
+offset:1
+field:Iz
+width:2
+style:inaccessible
+
+reg:R
+field:R
+
+end:table
+
+= r2000
+year:1999
+name:Rabbit 2000
+
+>Partially compatible with the #z80#.
+
+= ez80
+year:2001
+name:Zilog eZ80
+
+>Mostly compatible extension of the #z180#.
+
+key:Address space
+value:24-bit
+key:I/O space
+value:16-bit
+key:Operation modes
+value:Z80 mode vs ADL (address and data long) mode vs MADL (mixed ADL) mode
+
+reg:AF
+field:F
+field:A
+next:AF'
+
+reg:AF'
+field:F'
+field:A'
+
+reg:BC
+field:C
+field:B
+field:BCU
+style:inaccessible
+next:BC'
+
+reg:BC'
+field:C'
+field:B'
+field:BCU'
+style:inaccessible
+
+reg:DE
+field:E
+field:D
+field:DEU
+style:inaccessible
+next:DE'
+
+reg:DE'
+field:E'
+field:D'
+field:DEU'
+style:inaccessible
+
+reg:HL
+field:L
+field:H
+field:HLU
+style:inaccessible
+next:HL'
+
+reg:HL'
+field:L'
+field:H'
+field:HLU'
+style:inaccessible
+
+reg:IX
+field:IXL
+field:IXH
+field:IXU
+style:inaccessible
+
+reg:IY
+field:IYL
+field:IYH
+field:IYU
+style:inaccessible
+
+reg:SPL
+field:SPL
+width:3
+next:SPS
+
+reg:SPS
+field:SPS
+width:2
+
+reg:PC
+field:PC
+width:2
+field:
+style:inaccessible
+
+reg:I
+field:I
+offset:1
+field:
+width:1
+style:inaccessible
+
+reg:R
+field:R
+
+reg:MB
+field:MB
+offset:2
+
+end:table
+
+= r3000
+year:2002
+name:Rabbit 3000
+
+>Compatible extension of the #r2000#.
+
+= r4000
+year:2006
+name:Rabbit 4000
+ref:r5000
+year:2008
+name:Rabbit 5000
+
+>Compatible extension of the #r3000#, with a new encoding mode that replaces a few instructions.
+
+= r6000
+year:2010
+name:Rabbit 6000
+
+>Extension of the #r5000#.
+
+= z80n
+year:2017
+name:SpecNext Ltd. Z80N
+
+>Compatible extension of the #z80#, used as the FPGA of the ZX Spectrum Next.
+
+key:Address space
+value:16-bit
+key:I/O space
+value:16-bit
+
