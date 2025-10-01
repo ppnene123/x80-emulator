@@ -27,7 +27,7 @@ Most of these are not compatible with each other.
 
 Other derivatives of the chips include the Sharp SM83, used as the CPU for the Gameboy, the 16-bit R800 from ASCII corporation, the КР580ВМ1 (KR580VM1) from the Soviet Union and the Rabbit series of processors.
 
-# Comilation
+# Compilation
 
 Running `make` should generate the binaries and HTML tables in the `out` directory.
 This includes the `assembler`, `disassembler` and `emulator`.
