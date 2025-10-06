@@ -130,7 +130,6 @@ struct x80_state_t
 	x80_output_serial_t * output_serial;
 
 	jmp_buf exc;
-	// TODO: incorporate
 	struct
 	{
 		uint16_t length;
@@ -166,7 +165,7 @@ struct x80_state_t
 	};
 
 #if BYTE_ORDER == LITTLE_ENDIAN
-# define _DEFREG(__name, __low, __high, __suffix) \
+# define _DEFREG(__name, __high, __low, __suffix) \
 	union \
 	{ \
 		address_t __name##__suffix; \
@@ -177,7 +176,7 @@ struct x80_state_t
 		}; \
 	}
 #elif BYTE_ORDER == BIT_ENDIAN
-# define _DEFREG(__name, __low, __high, __suffix) \
+# define _DEFREG(__name, __high, __low, __suffix) \
 	union \
 	{ \
 		address_t __name##__suffix; \
