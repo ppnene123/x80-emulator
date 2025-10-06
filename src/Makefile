@@ -4,7 +4,9 @@
 SHELL:=/bin/bash
 
 SRCDIR=.
+CPUDIR=${SRCDIR}/cpu
 OUTDIR=../out
+HTMLDIR=../html
 
 CFLAGS=-Wall
 #CFLAGS+= -Werror
@@ -14,23 +16,26 @@ CFLAGS+= -O3
 EMUCPUS=i80 i85 vm1 sm83 z80 z180 z280 z380 ez80 r800
 TESTCPUS=i80 i85 vm1 sm83 z80 z180 z280 z380 ez80 r800
 
-all: ${OUTDIR} ${OUTDIR}/tables.html ${OUTDIR}/assembler ${OUTDIR}/disassembler ${OUTDIR}/emulator tests
+all: ${OUTDIR} ${HTMLDIR} ${HTMLDIR}/tables.html ${OUTDIR}/assembler ${OUTDIR}/disassembler ${OUTDIR}/emulator tests
 
 ${OUTDIR}:
 	mkdir -p ${OUTDIR}
+
+${HTMLDIR}:
+	mkdir -p ${HTMLDIR}
 
 clean:
 	rm -f ${OUTDIR}/*
 
 distclean: clean
-	rm -rf *~ ${SRCDIR}/__pycache__
+	rm -rf *~ ${CPUDIR}/__pycache__ ${HTMLDIR}/*
 
 tests: $(patsubst %,${OUTDIR}/test-%.diff,${TESTCPUS})
 
 .PHONY: all clean distclean tests
 
-${OUTDIR}/tables.html: ${SRCDIR}/generate.py ${SRCDIR}/isa.dat ${SRCDIR}/database.py ${SRCDIR}/genhtml.py
-	python3 $< html $(word 2,$^) ${OUTDIR}/tables
+${HTMLDIR}/tables.html: ${CPUDIR}/generate.py ${CPUDIR}/isa.dat ${CPUDIR}/database.py ${CPUDIR}/genhtml.py
+	python3 $< html $(word 2,$^) ${HTMLDIR}/tables
 
 # assembler.h is the first one, it is not used as a source
 ${OUTDIR}/assembler: ${SRCDIR}/assembler.h ${SRCDIR}/assembler.c ${OUTDIR}/parser.tab.c ${OUTDIR}/parser.yy.c
@@ -42,26 +47,26 @@ ${OUTDIR}/assembler: ${SRCDIR}/assembler.h ${SRCDIR}/assembler.c ${OUTDIR}/parse
 %.tab.c: %.y
 	bison -o $@ -d $<
 
-${OUTDIR}/parser.lex ${OUTDIR}/parser.y: ${SRCDIR}/isa.dat ${SRCDIR}/generate.py ${SRCDIR}/database.py ${SRCDIR}/genasm.py
+${OUTDIR}/parser.lex ${OUTDIR}/parser.y: ${CPUDIR}/isa.dat ${CPUDIR}/generate.py ${CPUDIR}/database.py ${CPUDIR}/genasm.py
 	python3 $(word 2,$^) parse $< ${OUTDIR}/parser
 
 ${OUTDIR}/disassembler: ${SRCDIR}/disassembler.c ${SRCDIR}/disassembler.h ${OUTDIR}/disassembler.gen.c
 	gcc -o $@ $< ${CFLAGS}
 
-${OUTDIR}/disassembler.gen.c: ${SRCDIR}/isa.dat ${SRCDIR}/generate.py ${SRCDIR}/database.py ${SRCDIR}/gendasm.py
+${OUTDIR}/disassembler.gen.c: ${CPUDIR}/isa.dat ${CPUDIR}/generate.py ${CPUDIR}/database.py ${CPUDIR}/gendasm.py
 	python3 $(word 2,$^) disasm $< > $@
 
-${OUTDIR}/emulator: ${SRCDIR}/emumain.c ${OUTDIR}/emulator.gen.c ${OUTDIR}/disassembler.gen.c ${OUTDIR}/assembler $(patsubst %,${SRCDIR}/%.c,${EMUCPUS}) $(patsubst %,${OUTDIR}/cpu_obj.%,${EMUCPUS})
+${OUTDIR}/emulator: ${SRCDIR}/emumain.c ${OUTDIR}/emulator.gen.c ${OUTDIR}/disassembler.gen.c ${OUTDIR}/assembler $(patsubst %,${CPUDIR}/%.c,${EMUCPUS}) $(patsubst %,${OUTDIR}/cpu_obj.%,${EMUCPUS})
 	# ${SRCDIR}/assembler.c removed, it is included in emulator
 	gcc -o $@ ${SRCDIR}/emumain.c $(patsubst %,${OUTDIR}/cpu_obj.%,${EMUCPUS}) ${OUTDIR}/parser.tab.c ${OUTDIR}/parser.yy.c ${CFLAGS}
 
-${OUTDIR}/emulator.gen.c: ${SRCDIR}/isa.dat ${SRCDIR}/generate.py ${SRCDIR}/database.py ${SRCDIR}/genemu.py
+${OUTDIR}/emulator.gen.c: ${CPUDIR}/isa.dat ${CPUDIR}/generate.py ${CPUDIR}/database.py ${CPUDIR}/genemu.py
 	python3 $(word 2,$^) emu $< $@
 
-${OUTDIR}/cpu_obj.%: ${SRCDIR}/cpu.c ${SRCDIR}/cpu.h ${SRCDIR}/common.c ${SRCDIR}/common.h ${OUTDIR}/emulator.gen.c ${OUTDIR}/disassembler.gen.c ${OUTDIR}/assembler ${SRCDIR}/%.c
-	gcc -c -o $@ ${SRCDIR}/cpu.c -DCPU_`echo $(suffix $@) | sed 's/^\.//' | tr '[:lower:]' '[:upper:]'` ${CFLAGS}
+${OUTDIR}/cpu_obj.%: ${CPUDIR}/cpu.c ${CPUDIR}/cpu.h ${CPUDIR}/common.c ${CPUDIR}/common.h ${OUTDIR}/emulator.gen.c ${OUTDIR}/disassembler.gen.c ${OUTDIR}/assembler ${CPUDIR}/%.c
+	gcc -c -o $@ ${CPUDIR}/cpu.c -DCPU_`echo $(suffix $@) | sed 's/^\.//' | tr '[:lower:]' '[:upper:]'` ${CFLAGS}
 
-${OUTDIR}/test-%.diff: ${SRCDIR}/generate.py ${SRCDIR}/isa.dat ${OUTDIR}/assembler ${SRCDIR}/database.py ${SRCDIR}/genasm.py
+${OUTDIR}/test-%.diff: ${CPUDIR}/generate.py ${CPUDIR}/isa.dat ${OUTDIR}/assembler ${CPUDIR}/database.py ${CPUDIR}/genasm.py
 	python3 $< parse-test $(word 2,$^) $(basename $@)
 	$(word 3,$^) $(basename $@).asm -o $(basename $@).out
 	diff -y <(hex $(basename $@).bin) <(hex $(basename $@).out) > $@

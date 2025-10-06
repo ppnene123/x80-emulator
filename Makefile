@@ -7,6 +7,6 @@ clean:
 	make -C src clean
 
 distclean: clean
-	rm -rf *~
+	rm -rf *~ html
 	make -C src distclean
 

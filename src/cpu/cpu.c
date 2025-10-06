@@ -1815,7 +1815,7 @@ restart:
 	REFRESH();
 	switch(op)
 	{
-#include "../out/emulator.gen.c"
+#include "../../out/emulator.gen.c"
 	}
 
 	return true;

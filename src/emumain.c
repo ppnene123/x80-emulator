@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "disassembler.h"
-#include "cpu.h"
+#include "cpu/cpu.h"
 
 #define __PREFIXED(prefix, name) prefix##name
 #define _PREFIXED(prefix, name) __PREFIXED(prefix, name)
