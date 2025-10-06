@@ -27,7 +27,7 @@ Most of these are not compatible with each other.
 
 Other derivatives of the chips include the Sharp SM83, used as the CPU for the Gameboy, the 16-bit R800 from ASCII corporation, the КР580ВМ1 (KR580VM1) from the Soviet Union and the Rabbit series of processors.
 
-[See the generated instruction set tables](https://html-preview.github.io/?url=https://github.com/BinaryMelodies/x80-emulator/blob/main/doc/info.html)
+[See the generated instruction set tables](https://html-preview.github.io/?url=https://github.com/BinaryMelodies/x80-emulator/blob/main/html/tables.html)
 
 # Compilation
 
