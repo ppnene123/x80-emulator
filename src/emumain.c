@@ -2,6 +2,7 @@
 // TODO: separate into frontend and emulator
 
 #include <assert.h>
+#include <ctype.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -729,6 +730,31 @@ FILE * open_prl_file(const char * filename)
 	return fp;
 }
 
+void load_prl_file(x80_state_t * cpu, FILE * input_file)
+{
+	/* TODO */
+	fprintf(stderr, "TODO: PRL executables not yet supported\n");
+}
+
+void load_com_file(x80_state_t * cpu, FILE * input_file)
+{
+	uint32_t address = 0x0100;
+	fseek(input_file, 0L, SEEK_SET);
+	while(true)
+	{
+		int byte = fgetc(input_file);
+		if(byte == -1)
+			break;
+		x80_writebyte(cpu, address++, byte);
+	}
+}
+
+void load_cpm3_file(x80_state_t * cpu, FILE * input_file)
+{
+	/* TODO */
+	fprintf(stderr, "TODO: CP/M Plus executables not yet supported\n");
+}
+
 address_t load_cpm_file(x80_state_t * cpu, const char * filename)
 {
 	FILE * fp;
@@ -760,8 +786,7 @@ address_t load_cpm_file(x80_state_t * cpu, const char * filename)
 
 	if(isprl)
 	{
-		/* TODO */
-		fprintf(stderr, "TODO: PRL executables not yet supported\n");
+		load_prl_file(cpu, fp);
 		fclose(fp);
 		return 0;
 	}
@@ -770,21 +795,11 @@ address_t load_cpm_file(x80_state_t * cpu, const char * filename)
 		int byte = fgetc(fp);
 		if(byte == 0xC9)
 		{
-			/* TODO */
-			fprintf(stderr, "TODO: CP/M Plus executables not yet supported\n");
-			return 0;
+			load_cpm3_file(cpu, fp);
 		}
 		else
 		{
-			uint32_t address = 0x0100;
-			x80_writebyte(cpu, address, byte);
-			while(true)
-			{
-				byte = fgetc(fp);
-				if(byte == -1)
-					break;
-				x80_writebyte(cpu, ++address, byte);
-			}
+			load_com_file(cpu, fp);
 		}
 		fclose(fp);
 		return 0x0000;
@@ -1220,16 +1235,16 @@ void process_command(int cmd)
 
 int main(int argc, char * argv[])
 {
-	int i;
+	int argi;
 	bool do_debug = false;
 	bool do_disasm = false;
 	emulator_state = STATE_RUNNING;
 	int cpu_type = X80_CPU_Z80;
-	for(i = 1; i < argc; i++)
+	for(argi = 1; argi < argc; argi++)
 	{
-		if(argv[i][0] == '-')
+		if(argv[argi][0] == '-')
 		{
-			switch(argv[i][1])
+			switch(argv[argi][1])
 			{
 			case 'D':
 				do_disasm = true; /* TODO: remove */
@@ -1239,113 +1254,113 @@ int main(int argc, char * argv[])
 				do_debug = true;
 				break;
 			case 'S':
-				if(strcasecmp(&argv[i][2], "cpm") == 0)
+				if(strcasecmp(&argv[argi][2], "cpm") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 				}
-				else if(strcasecmp(&argv[i][2], "cpm10") == 0)
+				else if(strcasecmp(&argv[argi][2], "cpm10") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = 0x0010;
 				}
-				else if(strcasecmp(&argv[i][2], "cpm13") == 0)
+				else if(strcasecmp(&argv[argi][2], "cpm13") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = 0x0013;
 				}
-				else if(strcasecmp(&argv[i][2], "cpm14") == 0
-					|| strcasecmp(&argv[i][2], "cpm1") == 0)
+				else if(strcasecmp(&argv[argi][2], "cpm14") == 0
+					|| strcasecmp(&argv[argi][2], "cpm1") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = 0x0014;
 				}
-				else if(strcasecmp(&argv[i][2], "cpm20") == 0)
+				else if(strcasecmp(&argv[argi][2], "cpm20") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = 0x0020;
 				}
-				else if(strcasecmp(&argv[i][2], "cpm22") == 0
-					|| strcasecmp(&argv[i][2], "cpm2") == 0)
+				else if(strcasecmp(&argv[argi][2], "cpm22") == 0
+					|| strcasecmp(&argv[argi][2], "cpm2") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = 0x0022;
 				}
-				else if(strcasecmp(&argv[i][2], "cpm31") == 0
-					|| strcasecmp(&argv[i][2], "cpm3") == 0)
+				else if(strcasecmp(&argv[argi][2], "cpm31") == 0
+					|| strcasecmp(&argv[argi][2], "cpm3") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = 0x0031;
 				}
-				else if(strcasecmp(&argv[i][2], "mpm1") == 0)
+				else if(strcasecmp(&argv[argi][2], "mpm1") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = 0x0122;
 				}
-				else if(strcasecmp(&argv[i][2], "mpm2") == 0)
+				else if(strcasecmp(&argv[argi][2], "mpm2") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = 0x0130;
 				}
 				break;
 			case 'c':
-				if(strcasecmp(&argv[i][2], "i8080") == 0
-				|| strcasecmp(&argv[i][2], "8080") == 0
-				|| strcasecmp(&argv[i][2], "i80") == 0
-				|| strcasecmp(&argv[i][2], "80") == 0)
+				if(strcasecmp(&argv[argi][2], "i8080") == 0
+				|| strcasecmp(&argv[argi][2], "8080") == 0
+				|| strcasecmp(&argv[argi][2], "i80") == 0
+				|| strcasecmp(&argv[argi][2], "80") == 0)
 				{
 					cpu_type = X80_CPU_I80;
 				}
-				else if(strcasecmp(&argv[i][2], "i8085") == 0
-				|| strcasecmp(&argv[i][2], "8085") == 0
-				|| strcasecmp(&argv[i][2], "i85") == 0
-				|| strcasecmp(&argv[i][2], "85") == 0)
+				else if(strcasecmp(&argv[argi][2], "i8085") == 0
+				|| strcasecmp(&argv[argi][2], "8085") == 0
+				|| strcasecmp(&argv[argi][2], "i85") == 0
+				|| strcasecmp(&argv[argi][2], "85") == 0)
 				{
 					cpu_type = X80_CPU_I85;
 				}
-				else if(strcasecmp(&argv[i][2], "vm1") == 0)
+				else if(strcasecmp(&argv[argi][2], "vm1") == 0)
 				{
 					cpu_type = X80_CPU_VM1;
 				}
-				else if(strcasecmp(&argv[i][2], "z80") == 0)
+				else if(strcasecmp(&argv[argi][2], "z80") == 0)
 				{
 					cpu_type = X80_CPU_Z80;
 				}
-				else if(strcasecmp(&argv[i][2], "z180") == 0)
+				else if(strcasecmp(&argv[argi][2], "z180") == 0)
 				{
 					cpu_type = X80_CPU_Z180;
 				}
-				else if(strcasecmp(&argv[i][2], "z800") == 0)
+				else if(strcasecmp(&argv[argi][2], "z800") == 0)
 				{
 					cpu_type = X80_CPU_Z800;
 				}
-				else if(strcasecmp(&argv[i][2], "z280") == 0)
+				else if(strcasecmp(&argv[argi][2], "z280") == 0)
 				{
 					cpu_type = X80_CPU_Z280;
 				}
-				else if(strcasecmp(&argv[i][2], "z380") == 0)
+				else if(strcasecmp(&argv[argi][2], "z380") == 0)
 				{
 					cpu_type = X80_CPU_Z380;
 				}
-				else if(strcasecmp(&argv[i][2], "ez80") == 0)
+				else if(strcasecmp(&argv[argi][2], "ez80") == 0)
 				{
 					cpu_type = X80_CPU_EZ80;
 				}
-				else if(strcasecmp(&argv[i][2], "sm83") == 0
-				|| strcasecmp(&argv[i][2], "gbz80") == 0)
+				else if(strcasecmp(&argv[argi][2], "sm83") == 0
+				|| strcasecmp(&argv[argi][2], "gbz80") == 0)
 				{
 					cpu_type = X80_CPU_SM83;
 				}
-				else if(strcasecmp(&argv[i][2], "r800") == 0)
+				else if(strcasecmp(&argv[argi][2], "r800") == 0)
 				{
 					cpu_type = X80_CPU_R800;
 				}
 				else
 				{
-					fprintf(stderr, "Error: unknown cpu `%s'\n", &argv[i][2]);
+					fprintf(stderr, "Error: unknown cpu `%s'\n", &argv[argi][2]);
 				}
 				break;
 			default:
-				fprintf(stderr, "Error: unknown flag `%s'\n", argv[i]);
+				fprintf(stderr, "Error: unknown flag `%s'\n", argv[argi]);
 				exit(1);
 			}
 		}
@@ -1355,6 +1370,7 @@ int main(int argc, char * argv[])
 			break;
 		}
 	}
+
 	address_t zero_page = 0;
 	bool loaded_file;
 
@@ -1364,7 +1380,7 @@ int main(int argc, char * argv[])
 	cpu->write_byte = memory_writebyte;
 	cpu_reset(cpu);
 
-	if(i >= argc)
+	if(argi >= argc)
 	{
 		fprintf(stderr, "Warning: no command given\n");
 		loaded_file = false;
@@ -1373,7 +1389,7 @@ int main(int argc, char * argv[])
 	}
 	else
 	{
-		zero_page = load_cpm_file(cpu, argv[i++]);
+		zero_page = load_cpm_file(cpu, argv[argi]);
 		loaded_file = true;
 	}
 
@@ -1392,7 +1408,7 @@ int main(int argc, char * argv[])
 		x80_writebyte(cpu, 0xFE09,              0xC9); /* ret */
 
 		// BIOS entry points
-		for(i = 0; i < 16; i++)
+		for(int i = 0; i < 16; i++)
 		{
 			// jump table entry
 			x80_writebyte(cpu, 0xFF00 + 3 * i,        0xC3); /* jmp */
@@ -1401,6 +1417,25 @@ int main(int argc, char * argv[])
 			x80_writebyte(cpu, 0xFF80 + 4 * i + 2,    1 + i); /* BIOS function #i emulation */
 			x80_writebyte(cpu, 0xFF80 + 4 * i + 3,    0xC9); /* ret */
 		}
+
+		// command line
+		uint8_t pointer = 0x81;
+		for(int i = argi + 1; i < argc; i++)
+		{
+			x80_writebyte(cpu, pointer++, ' ');
+			if(pointer >= 0x100)
+				break;
+			for(int j = 0; argv[i][j] != 0; j++)
+			{
+				x80_writebyte(cpu, pointer++, toupper(argv[i][j]));
+				if(pointer >= 0x100)
+					break;
+			}
+			if(pointer >= 0x100)
+				break;
+		}
+
+		x80_writebyte(cpu, 0x80, pointer - 0x81);
 	}
 
 	if(loaded_file)
@@ -1472,7 +1507,7 @@ int main(int argc, char * argv[])
 						putchar(cpu->de & 0xFF);
 						break;
 					case 0x09:
-						for(i = 0; i < 0x10000; i++)
+						for(uint16_t i = 0; i < 0x10000; i++)
 						{
 							int c = x80_readbyte(cpu, cpu->de + i);
 							if(c == '$')
@@ -1482,12 +1517,17 @@ int main(int argc, char * argv[])
 						break;
 					case 0x0C:
 						{
-							uint16_t version = cpm_version < 0x0020 ? cpm_version : 0;
-							cpu->hl = version;
+							uint16_t version = cpm_version < 0x0020 ? 0 : cpm_version;
 							if(cpm_version >= 0x0014)
 							{
+								cpu->hl = version;
 								cpu->a = cpu->l;
 								cpu->b = cpu->h;
+							}
+							else
+							{
+								cpu->a = cpu->b = 0;
+								cpu->hl = 1; // TODO: FCBDSK address
 							}
 						}
 						break;
