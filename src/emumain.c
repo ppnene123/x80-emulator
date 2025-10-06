@@ -13,6 +13,11 @@
 #include "disassembler.h"
 #include "cpu/cpu.h"
 
+static inline address_t min(address_t a, address_t b)
+{
+	return a <= b ? a : b;
+}
+
 #define __PREFIXED(prefix, name) prefix##name
 #define _PREFIXED(prefix, name) __PREFIXED(prefix, name)
 #define PREFIXED(name) _PREFIXED(CPU_ID, name)
@@ -117,6 +122,7 @@ enum state
 	STATE_STEPPING,
 } emulator_state;
 unsigned long position_pointer;
+address_t emulation_halt_pointer = -1;
 
 extern address_t i80_get_address(x80_state_t * cpu, address_t address, x80_access_type_t access);
 extern address_t i85_get_address(x80_state_t * cpu, address_t address, x80_access_type_t access);
@@ -710,7 +716,18 @@ enum
 	X80_SYSTEM_UZI,
 } system_type = X80_SYSTEM_CPM;
 
-static uint16_t cpm_version = 0x0031;
+enum
+{
+	X80_CPM_10 = 0x0010,
+	X80_CPM_13 = 0x0013,
+	X80_CPM_14 = 0x0014,
+	X80_CPM_20 = 0x0020,
+	X80_CPM_22 = 0x0022,
+	X80_MPM_10 = 0x0122,
+	X80_MPM_20 = 0x0130,
+	X80_CPM_31 = 0x0031,
+};
+static uint16_t cpm_version = X80_CPM_31;
 
 FILE * open_com_file(const char * filename)
 {
@@ -773,16 +790,20 @@ void load_prl_body(x80_state_t * cpu, FILE * input, long file_offset, address_t 
 	}
 }
 
-void load_prl_file(x80_state_t * cpu, FILE * input_file, address_t zero_page)
+// returns initial SP
+address_t load_prl_file(x80_state_t * cpu, FILE * input_file, address_t zero_page)
 {
 	fseek(input_file, 1L, SEEK_SET);
 
 	uint16_t image_size = fread16le(input_file);
 
 	load_prl_body(cpu, input_file, 0x100L, zero_page + 0x100, zero_page + 0x100, image_size);
+
+	return 0xFE00;
 }
 
-void load_com_file(x80_state_t * cpu, FILE * input_file)
+// returns initial SP
+address_t load_com_file(x80_state_t * cpu, FILE * input_file)
 {
 	uint32_t address = 0x0100;
 	fseek(input_file, 0L, SEEK_SET);
@@ -793,12 +814,68 @@ void load_com_file(x80_state_t * cpu, FILE * input_file)
 			break;
 		x80_writebyte(cpu, address++, byte);
 	}
+	return 0xFE00;
 }
 
-void load_cpm3_file(x80_state_t * cpu, FILE * input_file)
+// returns initial SP
+address_t load_cpm3_file(x80_state_t * cpu, FILE * input_file)
 {
-	/* TODO */
-	fprintf(stderr, "TODO: CP/M Plus executables not yet supported\n");
+	fseek(input_file, 1L, SEEK_SET);
+	uint16_t image_size = fread16le(input_file);
+	// TODO: pre-initialization code is ignored
+	fseek(input_file, 0xFL, SEEK_SET);
+	uint8_t rsx_count = fread8(input_file);
+	rsx_count = min(15, rsx_count);
+
+	address_t address = 0x100;
+
+	fseek(input_file, 0x100L, SEEK_SET);
+	for(uint16_t i = 0; i < image_size; i++)
+	{
+		int c = fgetc(input_file);
+		if(c == -1)
+			break;
+		x80_writebyte(cpu, address + i, c);
+	}
+
+	struct rsx_record
+	{
+		uint16_t offset;
+		uint16_t length;
+	} rsx_records[15];
+
+	for(uint8_t rsx_index = 0; rsx_index < rsx_count; rsx_index++)
+	{
+		fseek(input_file, 0x10L * (1 + rsx_index), SEEK_SET);
+		rsx_records[rsx_index].offset = fread16le(input_file);
+		rsx_records[rsx_index].length = fread16le(input_file);
+	}
+
+	uint16_t next_chain = 0xFE00;
+
+	address = next_chain;
+	for(uint8_t rsx_index = 0; rsx_index < rsx_count; rsx_index++)
+	{
+		address = (next_chain - rsx_records[rsx_index].length) & 0xFF00;
+		load_prl_body(cpu, input_file, rsx_records[rsx_index].offset, address, address, rsx_records[rsx_index].length);
+
+		printf("%X %X\n", address, next_chain);
+		x80_writeword(cpu, address + 0x000A, 2, next_chain + 0x0006);
+		if(next_chain != 0xFE00)
+		{
+			x80_writeword(cpu, next_chain + 0x000C, 2, address + 0x000B);
+		}
+		if(rsx_index == rsx_count - 1)
+		{
+			x80_writeword(cpu, address + 0x000C, 2, 0x0007);
+		}
+		next_chain = address;
+		address -= 0x100;
+	}
+
+	x80_writeword(cpu, 0x0006, 2, next_chain + 0x0006);
+
+	return address;
 }
 
 address_t load_cpm_file(x80_state_t * cpu, const char * filename, address_t load_address)
@@ -833,8 +910,16 @@ address_t load_cpm_file(x80_state_t * cpu, const char * filename, address_t load
 	if(isprl)
 	{
 		address_t zero_page = load_address - 0x100;
-		load_prl_file(cpu, fp, zero_page);
+		address_t sp = load_prl_file(cpu, fp, zero_page);
 		fclose(fp);
+
+		x80_writeword(cpu, zero_page + 0x06, 2, 0xFE06);
+
+		sp -= 2;
+		cpu->sp = sp;
+		x80_writeword(cpu, sp, 2, 0);
+		cpu->pc = zero_page + 0x0100;
+
 		return zero_page;
 	}
 	else
@@ -842,15 +927,24 @@ address_t load_cpm_file(x80_state_t * cpu, const char * filename, address_t load
 		if(load_address != 0x100)
 			fprintf(stderr, "Warning: load address 0x%X specified, ignored\n", load_address);
 
+		address_t sp;
 		int byte = fgetc(fp);
 		if(byte == 0xC9)
 		{
-			load_cpm3_file(cpu, fp);
+			sp = load_cpm3_file(cpu, fp);
 		}
 		else
 		{
-			load_com_file(cpu, fp);
+			sp = load_com_file(cpu, fp);
+
+			x80_writeword(cpu, 0x0006, 2, 0xFE06);
 		}
+
+		sp -= 2;
+		cpu->sp = sp;
+		x80_writeword(cpu, sp, 2, 0);
+		cpu->pc = 0x0100;
+
 		fclose(fp);
 		return 0x0000;
 	}
@@ -872,6 +966,8 @@ enum
 	CMD_STEP,
 	CMD_WRITE,
 	CMD_ERROR,
+
+	CMD_CPU_DISASM_STEP,
 };
 
 static const char * cmdnames[] =
@@ -933,6 +1029,9 @@ int scan_command(void)
 		break;
 	case 's':
 		cmd = CMD_STEP;
+		break;
+	case 'S':
+		cmd = CMD_CPU_DISASM_STEP;
 		break;
 	case 'w':
 		cmd = CMD_WRITE;
@@ -1209,6 +1308,22 @@ void process_command(int cmd)
 		end_line();
 		break;
 	case CMD_RUN:
+		switch(scan_sign_option())
+		{
+		case '+':
+			emulation_halt_pointer = position_pointer + scan_hex();
+			break;
+		case '-':
+			emulation_halt_pointer = position_pointer - scan_hex();
+			break;
+		case 0:
+			if(scan_hex_option())
+				emulation_halt_pointer = scan_hex();
+			else
+				emulation_halt_pointer = -1;
+			break;
+		}
+
 		debugger_run();
 		end_line();
 		break;
@@ -1280,6 +1395,29 @@ void process_command(int cmd)
 		break;
 	case CMD_QUIT:
 		exit(0);
+
+	case CMD_CPU_DISASM_STEP:
+		if(!scan_string_option())
+			debugger_cpu_all();
+		else
+		{
+			char buff[8];
+			scan_string(buff, sizeof buff);
+			if(scan_hex_option())
+				debugger_cpu_set(buff, scan_hex());
+			else
+				debugger_cpu_get(buff);
+		}
+
+		if(scan_hex_option())
+			debugger_disasm(scan_hex());
+		else
+			debugger_disasm(1);
+
+		debugger_step();
+
+		end_line();
+		break;
 	}
 }
 
@@ -1315,45 +1453,45 @@ int main(int argc, char * argv[])
 				else if(strcasecmp(&argv[argi][2], "cpm10") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
-					cpm_version = 0x0010;
+					cpm_version = X80_CPM_10;
 				}
 				else if(strcasecmp(&argv[argi][2], "cpm13") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
-					cpm_version = 0x0013;
+					cpm_version = X80_CPM_13;
 				}
 				else if(strcasecmp(&argv[argi][2], "cpm14") == 0
 					|| strcasecmp(&argv[argi][2], "cpm1") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
-					cpm_version = 0x0014;
+					cpm_version = X80_CPM_14;
 				}
 				else if(strcasecmp(&argv[argi][2], "cpm20") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
-					cpm_version = 0x0020;
+					cpm_version = X80_CPM_20;
 				}
 				else if(strcasecmp(&argv[argi][2], "cpm22") == 0
 					|| strcasecmp(&argv[argi][2], "cpm2") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
-					cpm_version = 0x0022;
+					cpm_version = X80_CPM_22;
 				}
 				else if(strcasecmp(&argv[argi][2], "cpm31") == 0
 					|| strcasecmp(&argv[argi][2], "cpm3") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
-					cpm_version = 0x0031;
+					cpm_version = X80_CPM_31;
 				}
 				else if(strcasecmp(&argv[argi][2], "mpm1") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
-					cpm_version = 0x0122;
+					cpm_version = X80_MPM_10;
 				}
 				else if(strcasecmp(&argv[argi][2], "mpm2") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
-					cpm_version = 0x0130;
+					cpm_version = X80_MPM_20;
 				}
 				break;
 			case 'c':
@@ -1426,7 +1564,7 @@ int main(int argc, char * argv[])
 	}
 
 	address_t zero_page = 0;
-	bool loaded_file;
+//	bool loaded_file;
 
 	cpu = malloc(sizeof(x80_state_t));
 	cpu->cpu_type = cpu_type;
@@ -1437,14 +1575,14 @@ int main(int argc, char * argv[])
 	if(argi >= argc)
 	{
 		fprintf(stderr, "Warning: no command given\n");
-		loaded_file = false;
+//		loaded_file = false;
 		emulator_state = STATE_WAITING;
 		do_debug = true;
 	}
 	else
 	{
 		zero_page = load_cpm_file(cpu, argv[argi], load_address);
-		loaded_file = true;
+//		loaded_file = true;
 	}
 
 	if(system_type == X80_SYSTEM_CPM)
@@ -1452,9 +1590,10 @@ int main(int argc, char * argv[])
 		// set up warm boot
 		x80_writebyte(cpu, zero_page + 0x00,    0xC3); /* jmp */
 		x80_writeword(cpu, zero_page + 0x01, 2, 0xFF03);
+
 		// set up BDOS entry
 		x80_writebyte(cpu, zero_page + 0x05,    0xC3); /* jmp */
-		x80_writeword(cpu, zero_page + 0x06, 2, 0xFE06);
+//		x80_writeword(cpu, zero_page + 0x06, 2, 0xFE06);
 
 		// BDOS entry point
 		x80_writeword(cpu, 0xFE06,           2, 0x6464); /* special instruction */
@@ -1492,17 +1631,14 @@ int main(int argc, char * argv[])
 		x80_writebyte(cpu, 0x80, pointer - 0x81);
 	}
 
-	if(loaded_file)
-	{
-		uint16_t sp = 0xFE00 - 2;
-		cpu->sp = sp;
-		x80_writeword(cpu, sp, 2, 0);
-		cpu->pc = zero_page + 0x0100;
-	}
-
 	while(true)
 	{
-		if(emulator_state == STATE_STEPPING)
+		if(emulator_state == STATE_RUNNING && cpu->pc == emulation_halt_pointer)
+		{
+			emulation_halt_pointer = -1;
+			emulator_state = STATE_WAITING;
+		}
+		else if(emulator_state == STATE_STEPPING)
 		{
 			emulator_state = STATE_WAITING;
 		}
@@ -1553,7 +1689,7 @@ int main(int argc, char * argv[])
 						{
 							int c = getchar();
 							cpu->a = c;
-							if(cpm_version >= 0x0020)
+							if(cpm_version >= X80_CPM_20)
 								cpu->l = c;
 						}
 						break;
@@ -1571,8 +1707,8 @@ int main(int argc, char * argv[])
 						break;
 					case 0x0C:
 						{
-							uint16_t version = cpm_version < 0x0020 ? 0 : cpm_version;
-							if(cpm_version >= 0x0014)
+							uint16_t version = cpm_version < X80_CPM_20 ? 0 : cpm_version;
+							if(cpm_version >= X80_CPM_14)
 							{
 								cpu->hl = version;
 								cpu->a = cpu->l;
@@ -1587,7 +1723,18 @@ int main(int argc, char * argv[])
 						break;
 					default:
 						fprintf(stderr, "Unimplemented (BDOS %02X)\n", creg);
-						exit(1);
+						if(cpm_version >= X80_CPM_20)
+						{
+							cpu->hl = 0;
+							cpu->a = cpu->l;
+							cpu->b = cpu->h;
+						}
+						else
+						{
+							cpu->a = 0;
+							cpu->b = 0;
+						}
+						break;
 					}
 				}
 				break;
