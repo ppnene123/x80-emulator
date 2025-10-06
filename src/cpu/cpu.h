@@ -139,15 +139,87 @@ struct x80_state_t
 	} fetch_source;
 
 	// most common registers
-	uint16_t  af, af2;
-	address_t bc, bc2;
-	address_t de, de2;
-	address_t hl, hl2;
-	address_t ix, ix2;
-	address_t iy, iy2;
+	union
+	{
+		uint16_t af;
+		struct
+		{
+#if BYTE_ORDER == LITTLE_ENDIAN
+			uint8_t f, a;
+#elif BYTE_ORDER == BIG_ENDIAN
+			uint8_t a, f;
+#endif
+		};
+	};
+
+	union
+	{
+		uint16_t af2;
+		struct
+		{
+#if BYTE_ORDER == LITTLE_ENDIAN
+			uint8_t f2, a2;
+#elif BYTE_ORDER == BIG_ENDIAN
+			uint8_t a2, f2;
+#endif
+		};
+	};
+
+#if BYTE_ORDER == LITTLE_ENDIAN
+# define _DEFREG(__name, __low, __high, __suffix) \
+	union \
+	{ \
+		address_t __name##__suffix; \
+		struct \
+		{ \
+			uint8_t __low##__suffix, __high##__suffix; \
+			address_t __name##u##__suffix : 16; \
+		}; \
+	}
+#elif BYTE_ORDER == BIT_ENDIAN
+# define _DEFREG(__name, __low, __high, __suffix) \
+	union \
+	{ \
+		address_t __name##__suffix; \
+		struct \
+		{ \
+			address_t __name##u##__suffix : 16; \
+			uint8_t __high##__suffix, __low##__suffix; \
+		}; \
+	}
+#endif
+
+	_DEFREG(bc, b,   c,);
+	_DEFREG(de, d,   e,);
+	_DEFREG(hl, h,   l,);
+	_DEFREG(ix, ixh, ixl,);
+	_DEFREG(iy, iyh, iyl,);
+
+	_DEFREG(bc, b,   c,   2);
+	_DEFREG(de, d,   e,   2);
+	_DEFREG(hl, h,   l,   2);
+	_DEFREG(ix, ixh, ixl, 2);
+	_DEFREG(iy, iyh, iyl, 2);
+
+#undef _DEFREG
+
 	address_t sp;
 	address_t pc, old_pc;
-	address_t ir; /* I and R registers */
+
+	union
+	{
+		address_t ir; /* I and R registers */
+		struct
+		{
+#if BYTE_ORDER == LITTLE_ENDIAN
+			uint8_t r;
+			address_t i : 24;
+#elif BYTE_ORDER == BIT_ENDIAN
+			address_t i : 24;
+			uint8_t r;
+#endif
+		};
+	};
 
 	union
 	{
