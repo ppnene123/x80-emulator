@@ -689,6 +689,20 @@ int main()
 }
 #endif
 
+uint8_t fread8(FILE * input_file)
+{
+	uint8_t value;
+	fread(&value, 1, 1, input_file);
+	return value;
+}
+
+uint16_t fread16le(FILE * input_file)
+{
+	uint16_t value;
+	fread(&value, 2, 1, input_file);
+	return le16toh(value);
+}
+
 enum
 {
 	X80_SYSTEM_NONE,
@@ -730,10 +744,42 @@ FILE * open_prl_file(const char * filename)
 	return fp;
 }
 
-void load_prl_file(x80_state_t * cpu, FILE * input_file)
+void load_prl_body(x80_state_t * cpu, FILE * input, long file_offset, address_t address, address_t relocation_address, uint16_t length)
 {
-	/* TODO */
-	fprintf(stderr, "TODO: PRL executables not yet supported\n");
+	fseek(input, file_offset, SEEK_SET);
+	for(uint16_t i = 0; i < length; i++)
+	{
+		int c = fgetc(input);
+		if(c == -1)
+			break;
+		x80_writebyte(cpu, address + i, c);
+	}
+	if(relocation_address != 0x0100)
+	{
+		for(uint16_t i = 0; i < (length + 7) / 8; i++)
+		{
+			int c = fgetc(input);
+			if(c == -1)
+				break;
+			for(int j = 7; j >= 0; j--)
+			{
+				if(((c >> j) & 1) != 0)
+				{
+					x80_writebyte(cpu, address + i * 8 + 7 - j,
+						x80_readbyte(cpu, address + i * 8 + 7 - j) + ((relocation_address - 0x0100) >> 8));
+				}
+			}
+		}
+	}
+}
+
+void load_prl_file(x80_state_t * cpu, FILE * input_file, address_t zero_page)
+{
+	fseek(input_file, 1L, SEEK_SET);
+
+	uint16_t image_size = fread16le(input_file);
+
+	load_prl_body(cpu, input_file, 0x100L, zero_page + 0x100, zero_page + 0x100, image_size);
 }
 
 void load_com_file(x80_state_t * cpu, FILE * input_file)
@@ -755,7 +801,7 @@ void load_cpm3_file(x80_state_t * cpu, FILE * input_file)
 	fprintf(stderr, "TODO: CP/M Plus executables not yet supported\n");
 }
 
-address_t load_cpm_file(x80_state_t * cpu, const char * filename)
+address_t load_cpm_file(x80_state_t * cpu, const char * filename, address_t load_address)
 {
 	FILE * fp;
 	int isprl = 0;
@@ -786,12 +832,16 @@ address_t load_cpm_file(x80_state_t * cpu, const char * filename)
 
 	if(isprl)
 	{
-		load_prl_file(cpu, fp);
+		address_t zero_page = load_address - 0x100;
+		load_prl_file(cpu, fp, zero_page);
 		fclose(fp);
-		return 0;
+		return zero_page;
 	}
 	else
 	{
+		if(load_address != 0x100)
+			fprintf(stderr, "Warning: load address 0x%X specified, ignored\n", load_address);
+
 		int byte = fgetc(fp);
 		if(byte == 0xC9)
 		{
@@ -1240,6 +1290,7 @@ int main(int argc, char * argv[])
 	bool do_disasm = false;
 	emulator_state = STATE_RUNNING;
 	int cpu_type = X80_CPU_Z80;
+	address_t load_address = 0x100;
 	for(argi = 1; argi < argc; argi++)
 	{
 		if(argv[argi][0] == '-')
@@ -1252,6 +1303,9 @@ int main(int argc, char * argv[])
 			case 'd':
 				emulator_state = STATE_WAITING;
 				do_debug = true;
+				break;
+			case 'L':
+				load_address = strtoll(&argv[argi][2], NULL, 0);
 				break;
 			case 'S':
 				if(strcasecmp(&argv[argi][2], "cpm") == 0)
@@ -1389,7 +1443,7 @@ int main(int argc, char * argv[])
 	}
 	else
 	{
-		zero_page = load_cpm_file(cpu, argv[argi]);
+		zero_page = load_cpm_file(cpu, argv[argi], load_address);
 		loaded_file = true;
 	}
 
