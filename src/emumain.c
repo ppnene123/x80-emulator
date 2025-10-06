@@ -718,30 +718,36 @@ enum
 
 enum
 {
+	X80_MPM_FLAG = 0x01,
+
 	// For most of these, the exact version number is reported when calling BDOS function call 6, except for the first three entries
 	// CP/M 1975 source from the Computer History Museum, version 1.0 assigned for lack of better alternatives
-	X80_CPM_10 = 0x0010,
+	X80_CPM_10 = 0x10,
 	// CP/M 1.3
-	X80_CPM_13 = 0x0013,
+	X80_CPM_13 = 0x13,
 	// CP/M 1.4
-	X80_CPM_14 = 0x0014,
+	X80_CPM_14 = 0x14,
 	// CP/M 2.0
-	X80_CPM_20 = 0x0020,
+	X80_CPM_20 = 0x20,
 	// CP/M 2.2
-	X80_CPM_22 = 0x0022,
+	X80_CPM_22 = 0x22,
+	// Personal CP/M
+	X80_CPM_28 = 0x28,
 	// MP/M 1
-	X80_MPM_1  = 0x0122,
+	X80_MPM_1  = 0x22,
 	// MP/M II
-	X80_MPM_2  = 0x0130,
+	X80_MPM_2  = 0x30,
 	// CP/M Plus
-	X80_CPM_3  = 0x0031,
+	X80_CPM_3  = 0x31,
 
 	// MSX-DOS 1.00
 	X80_MSXDOS_1 = 0x0100,
 	// MSX-DOS 2.20
 	X80_MSXDOS_2 = 0x0220,
 };
-static uint16_t cpm_version = X80_CPM_3;
+static uint8_t cpm_version = X80_CPM_3;
+static uint8_t cpm_version_flags = 0;
+static uint8_t mpm_version = 0; // only for MP/M 2 and later
 static uint16_t msx_dos_version = 0;
 
 FILE * open_com_file(const char * filename)
@@ -1510,49 +1516,75 @@ int main(int argc, char * argv[])
 				if(strcasecmp(&argv[argi][2], "cpm") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
+					cpm_version = X80_CPM_3;
+					cpm_version_flags = 0;
 				}
 				else if(strcasecmp(&argv[argi][2], "cpm10") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = X80_CPM_10;
+					cpm_version_flags = 0;
 				}
 				else if(strcasecmp(&argv[argi][2], "cpm13") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = X80_CPM_13;
+					cpm_version_flags = 0;
 				}
 				else if(strcasecmp(&argv[argi][2], "cpm14") == 0
 					|| strcasecmp(&argv[argi][2], "cpm1") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = X80_CPM_14;
+					cpm_version_flags = 0;
 				}
 				else if(strcasecmp(&argv[argi][2], "cpm20") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = X80_CPM_20;
+					cpm_version_flags = 0;
 				}
 				else if(strcasecmp(&argv[argi][2], "cpm22") == 0
 					|| strcasecmp(&argv[argi][2], "cpm2") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = X80_CPM_22;
+					cpm_version_flags = 0;
+				}
+				else if(strcasecmp(&argv[argi][2], "cpm28") == 0
+					|| strcasecmp(&argv[argi][2], "pcpm") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = X80_CPM_28;
+					cpm_version_flags = 0;
 				}
 				else if(strcasecmp(&argv[argi][2], "cpm31") == 0
 					|| strcasecmp(&argv[argi][2], "cpm3") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = X80_CPM_3;
+					cpm_version_flags = 0;
 				}
 				else if(strcasecmp(&argv[argi][2], "mpm1") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = X80_MPM_1;
+					cpm_version_flags = X80_MPM_FLAG;
 				}
-				else if(strcasecmp(&argv[argi][2], "mpm2") == 0)
+				else if(strcasecmp(&argv[argi][2], "mpm2") == 0
+					|| strcasecmp(&argv[argi][2], "mpm20") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = X80_MPM_2;
+					mpm_version = 0x20;
+					cpm_version_flags = X80_MPM_FLAG;
+				}
+				else if(strcasecmp(&argv[argi][2], "mpm21") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = X80_MPM_2;
+					mpm_version = 0x21;
+					cpm_version_flags = X80_MPM_FLAG;
 				}
 				else if(strcasecmp(&argv[argi][2], "msxdos10") == 0
 					|| strcasecmp(&argv[argi][2], "msxdos1") == 0
@@ -1569,6 +1601,7 @@ int main(int argc, char * argv[])
 				{
 					system_type = X80_SYSTEM_CPM;
 					cpm_version = X80_CPM_22;
+					cpm_version_flags = 0;
 					msx_dos_version = X80_MSXDOS_2;
 				}
 				break;
@@ -1779,6 +1812,7 @@ int main(int argc, char * argv[])
 			x80_advance_pc(cpu, 2);
 			int code = x80_readbyte_exec(cpu, x80_advance_pc(cpu, 1));
 			uint8_t creg = cpu->bc & 0xFF;
+			// this list is based on John Elliott's documents
 			switch(code)
 			{
 			case 0:
@@ -1792,9 +1826,11 @@ int main(int argc, char * argv[])
 					switch(creg)
 					{
 					case 0x00:
+						/* P_TERMCPM or TERM0 */
 						exit(0);
 						break;
 					case 0x01:
+						/* C_READ or CONIN */
 						{
 							int c = getchar();
 							cpu->a = c;
@@ -1803,9 +1839,125 @@ int main(int argc, char * argv[])
 						}
 						break;
 					case 0x02:
-						putchar(cpu->de & 0xFF);
+						/* C_WRITE or CONOUT */
+						putchar(cpu->e);
+						break;
+					case 0x03:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* Raw console input */
+							// TODO
+						}
+						else
+						{
+							/* A_READ or AUXIN */
+							// TODO
+						}
+						break;
+					case 0x04:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* Raw console output */
+							// TODO
+						}
+						else
+						{
+							/* A_WRITE or AUXOUT */
+							// TODO
+						}
+						break;
+					case 0x05:
+						/* L_WRITE or LSTOUT */
+						// TODO
+						break;
+					case 0x06:
+						if(cpm_version < X80_CPM_20)
+						{
+							/* Raw memory size */
+							// TODO
+						}
+						else
+						{
+							/* C_RAWIO or DIRIO */
+							switch(cpu->e)
+							{
+							case 0xFF:
+								if((cpm_version < X80_MPM_2) && (cpm_version_flags & X80_MPM_FLAG))
+								{
+									// TODO
+								}
+								else
+								{
+									// TODO
+								}
+								break;
+							case 0xFE:
+								if(cpm_version >= X80_CPM_3)
+								{
+									// TODO
+									break;
+								}
+							case 0xFD:
+								if(cpm_version >= X80_CPM_3)
+								{
+									// TODO
+									break;
+								}
+							default:
+								putchar(cpu->e);
+								break;
+							}
+						}
+						break;
+					case 0x07:
+						if(msx_dos_version != 0)
+						{
+							/* DIRIN */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							// not supported
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							/* A_STATIN */
+							// TODO
+						}
+						else
+						{
+							/* Get I/O byte */
+							cpu->a = x80_readbyte(cpu, zero_page + 0x0003);
+							if(cpm_version >= X80_CPM_14)
+							{
+								cpu->l = cpu->a;
+								cpu->h = cpu->b = 0;
+							}
+						}
+						break;
+					case 0x08:
+						if(msx_dos_version != 0)
+						{
+							/* INNOE */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							// not supported
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							/* A_STATOUT */
+							// TODO
+						}
+						else
+						{
+							/* Set I/O byte */
+							x80_writebyte(cpu, zero_page + 0x0003, cpu->e);
+						}
 						break;
 					case 0x09:
+						/* C_WRITESTR or STROUT */
 						for(uint16_t i = 0; i < 0x10000; i++)
 						{
 							int c = x80_readbyte(cpu, cpu->de + i);
@@ -1814,36 +1966,184 @@ int main(int argc, char * argv[])
 							putchar(c);
 						}
 						break;
+					case 0x0A:
+						/* C_READSTR or BUFIN */
+						// TODO
+						break;
+					case 0x0B:
+						/* C_STAT or CONST */
+						// TODO
+						break;
 					case 0x0C:
 						{
-							uint16_t version = cpm_version < X80_CPM_20 ? 0 : cpm_version;
+							/* S_BDOSVER or CPMVER, Lift head */
 							if(cpm_version >= X80_CPM_14)
 							{
-								cpu->hl = version;
-								cpu->a = cpu->l;
-								cpu->b = cpu->h;
+								cpu->a = cpu->l = cpm_version < X80_CPM_20 ? 0 : cpm_version;
+								cpu->b = cpu->h = cpm_version_flags;
 							}
 							else
 							{
 								cpu->a = cpu->b = 0;
-								cpu->hl = 1; // TODO: FCBDSK address
+								cpu->hl = 0xFFFF; // TODO: FCBDSK address
 							}
+						}
+						break;
+					case 0x0D:
+						/* DRV_ALLRESET or DSKRST */
+						// TODO
+						break;
+					case 0x0E:
+						/* DRV_SET or SELDSK */
+						// TODO
+						break;
+					case 0x0F:
+						/* F_OPEN or FOPEN */
+						// TODO
+						break;
+					case 0x10:
+						/* F_CLOSE or FCLOSE*/
+						// TODO
+						break;
+					case 0x11:
+						/* F_SFIRST or SFIRST */
+						// TODO
+						break;
+					case 0x12:
+						/* F_SNEXT or SNEXT */
+						// TODO
+						break;
+					case 0x13:
+						/* F_DELETE or FDEL */
+						// TODO
+						break;
+					case 0x14:
+						/* F_READ or RDSEQ */
+						// TODO
+						break;
+					case 0x15:
+						/* F_WRITE or WRSEQ */
+						// TODO
+						break;
+					case 0x16:
+						/* F_MAKE or FMAKE */
+						// TODO
+						break;
+					case 0x17:
+						/* F_RENAME or FREN */
+						// TODO
+						break;
+					case 0x18:
+						/* DRV_LOGINVEC or LOGIN */
+						// TODO
+						break;
+					case 0x19:
+						/* DRV_GET or CURDRV */
+						// TODO
+						break;
+					case 0x1A:
+						/* F_DMAOFF or SETDTA */
+						// TODO
+						break;
+					case 0x1B:
+						if(msx_dos_version != 0)
+						{
+							/* ALLOC */
+							// TODO
+						}
+						else
+						{
+							/* DRV_ALLOCVEC */
+							// TODO
+						}
+						break;
+					case 0x1C:
+						if(msx_dos_version != 0)
+						{
+							/* Unused */
+							cpu->hl = 0;
+							cpu->a = cpu->b = 0;
+						}
+						else
+						{
+							/* DRV_SETRO */
+							// TODO
+						}
+						break;
+					case 0x1D:
+						if(msx_dos_version != 0)
+						{
+							/* Unused */
+							cpu->hl = 0;
+							cpu->a = cpu->b = 0;
+						}
+						else
+						{
+							/* DRV_ROVEC */
+							// TODO
+						}
+						break;
+					case 0x1E:
+						if(msx_dos_version != 0)
+						{
+							/* Unused */
+							cpu->hl = 0;
+							cpu->a = cpu->b = 0;
+						}
+						else if(cpm_version == X80_CPM_10)
+						{
+							/* Set echo mode */
+							// TODO
+						}
+						else if(cpm_version == X80_CPM_14)
+						{
+							/* Set directory buffer */
+							// TODO
+						}
+						else if(cpm_version >= X80_CPM_20)
+						{
+							/* F_ATTRIB */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x1F:
+						if(msx_dos_version != 0)
+						{
+							/* Unused */
+							cpu->hl = 0;
+							cpu->a = cpu->b = 0;
+						}
+						else if(cpm_version >= X80_CPM_20)
+						{
+							/* DRV_DPB */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
 						}
 						break;
 					case 0x20:
 						if(msx_dos_version != 0)
 						{
-							cpu->a = 0;
+							/* Unused */
+							cpu->hl = 0;
+							cpu->a = cpu->b = 0;
 						}
 						else if(cpm_version >= X80_CPM_20)
 						{
+							/* F_USERNUM */
 							if(cpu->e == 0xFF)
 							{
-								cpu->l = cpu->a = x80_readbyte(cpu, 0x0004) >> 4;
+								cpu->l = cpu->a = x80_readbyte(cpu, zero_page + 0x0004) >> 4;
 							}
 							else
 							{
-								x80_writebyte(cpu, 0x0004, (cpu->e << 4) | (x80_readbyte(cpu, 0x0004) & 0x0F));
+								x80_writebyte(cpu, zero_page + 0x0004, (cpu->e << 4) | (x80_readbyte(cpu, zero_page + 0x0004) & 0x0F));
 							}
 						}
 						else
@@ -1851,9 +2151,847 @@ int main(int argc, char * argv[])
 							goto unimplemented_bdos_call;
 						}
 						break;
-					case 0x6B:
+					case 0x21:
+						if(cpm_version >= X80_CPM_20)
+						{
+							/* F_READRAND or RDRND */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x22:
+						if(cpm_version >= X80_CPM_20)
+						{
+							/* F_WRITERAND or WRRND */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x23:
+						if(cpm_version >= X80_CPM_20)
+						{
+							/* F_SIZE or FSIZE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x24:
+						if(cpm_version >= X80_CPM_20)
+						{
+							/* F_RANDREC or SETRND */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x25:
 						if(msx_dos_version != 0)
 						{
+							/* Unused */
+							cpu->hl = 0;
+							cpu->a = cpu->b = 0;
+						}
+						else if(cpm_version >= X80_CPM_22)
+						{
+							/* DRV_RESET */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x26:
+						if(msx_dos_version != 0)
+						{
+							/* WRBLK */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* DRV_ACCESS */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x27:
+						if(msx_dos_version != 0)
+						{
+							/* RDBLK */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* DRV_FREE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x28:
+						if(cpm_version >= X80_CPM_22)
+						{
+							/* F_WRITEZF or WRZER */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x29:
+						if(msx_dos_version != 0)
+						{
+							/* Unused */
+							cpu->hl = 0;
+							cpu->a = cpu->b = 0;
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* Test and write record */
+							// TODO
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							/* Test and write record */
+							cpu->a = cpu->l = 0xFF;
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x2A:
+						if(msx_dos_version != 0)
+						{
+							/* GDATE */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* F_LOCK */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x2B:
+						if(msx_dos_version != 0)
+						{
+							/* SDATE */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* F_UNLOCK */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x2C:
+						if(msx_dos_version != 0)
+						{
+							/* GTIME */
+							// TODO
+						}
+						else if(cpm_version >= 0x0030)
+						{
+							/* F_MULTISEC */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x2D:
+						if(msx_dos_version != 0)
+						{
+							/* STIME */
+							// TODO
+						}
+						else if(cpm_version >= X80_CPM_28)
+						{
+							/* F_ERRMODE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x2E:
+						if(msx_dos_version != 0)
+						{
+							/* VERIFY */
+							// TODO
+						}
+						else if(cpm_version >= 0x0030)
+						{
+							/* DRV_SPACE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x2F:
+						if(msx_dos_version != 0)
+						{
+							/* RDABS */
+							// TODO
+						}
+						else if(cpm_version >= 0x0030)
+						{
+							/* P_CHAIN */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x30:
+						if(msx_dos_version != 0)
+						{
+							/* WRABS */
+							// TODO
+						}
+						else if(cpm_version >= X80_CPM_28)
+						{
+							/* DRV_FLUSH */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x31:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* DPARM */
+							// TODO
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							/* Access system control block */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x32:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* Unused */
+							cpu->hl = 0;
+							cpu->a = cpu->b = 0;
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							/* S_BIOS */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x33:
+					case 0x34:
+					case 0x35:
+					case 0x36:
+					case 0x37:
+					case 0x38:
+					case 0x39:
+					case 0x3A:
+					case 0x3B:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* Unused */
+							cpu->hl = 0;
+							cpu->a = cpu->b = 0;
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x3C:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* Unused */
+							cpu->hl = 0;
+							cpu->a = cpu->b = 0;
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							/* Call to RSX, default behavior */
+							cpu->hl = 0x00FF;
+							cpu->a = cpu->l;
+							cpu->b = cpu->h;
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x3D:
+					case 0x3E:
+					case 0x3F:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* Unused */
+							cpu->hl = 0;
+							cpu->a = cpu->b = 0;
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x40:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* FFIRST */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x41:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* FNEXT */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x42:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* FNEW */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x43:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* FOPEN */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x44:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* CREATE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x45:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* CLOSE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x46:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* ENSURE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x47:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* DUP */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x48:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* READ */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x49:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* WRITE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x4A:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* SEEK */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x4B:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* IOCTL */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x4C:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* HTEST */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x4D:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* DELETE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x4E:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* RENAME */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x4F:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* MOVE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x50:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* ATTR */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x51:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* FTIME */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x52:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* HDELETE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x53:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* HRENAME */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x54:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* HMOVE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x55:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* HATTR */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x56:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* HFTIME */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x57:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* GETDTA */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x58:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* GETVFY */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x59:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* GETCD */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x5A:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* CHDIR */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x5B:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* PARSE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x5C:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* PFILE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x5D:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* CHKCHR */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x5E:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* WPATH */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x5F:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* FLUSH */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x60:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* FORK */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x61:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* JOIN */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x62:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* TERM */
+							exit(cpu->b);
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x63:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* DEFAB */
+							// TODO
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							/* F_TRUNCATE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x64:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* DEFER */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* DRV_SETLABEL */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x65:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* ERROR */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* DRV_GETLABEL */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x66:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* EXPLAIN */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* F_TIMEDATE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x67:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* FORMAT */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* F_WRITEXFCB */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x68:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* RAMD */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* T_SET */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x69:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* BUFFER */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* T_GET */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x6A:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* ASSIGN */
+							// TODO
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* F_PASSWD */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x6B:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* GENV */
 							char buffer[255];
 							for(uint8_t i = 0; ; i++)
 							{
@@ -1875,27 +3013,28 @@ int main(int argc, char * argv[])
 							}
 							cpu->a = cpu->b < strlen(value) + 1 ? 0xBF /* .ELONG */ : 0;
 						}
-						else if(cpm_version >= X80_MPM_2)
+						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
+							/* S_SERIAL */
 							// TODO
-							goto unimplemented_bdos_call;
 						}
 						else
 						{
 							goto unimplemented_bdos_call;
 						}
+						break;
 					end_6B:
 						break;
 					case 0x6C:
-						if(msx_dos_version != 0)
+						if(msx_dos_version >= X80_MSXDOS_2)
 						{
+							/* SENV */
 							// TODO
-							goto unimplemented_bdos_call;
 						}
 						else if(cpm_version >= X80_CPM_3)
 						{
+							/* P_CODE */
 							// TODO
-							goto unimplemented_bdos_call;
 						}
 						else
 						{
@@ -1905,6 +3044,7 @@ int main(int argc, char * argv[])
 					case 0x6D:
 						if(msx_dos_version != 0)
 						{
+							/* FENV */
 							char * name;
 							if(cpu->de == 0 || cpu->de > msx_dos_environment.item_count)
 							{
@@ -1922,10 +3062,26 @@ int main(int argc, char * argv[])
 							}
 							cpu->a = cpu->b < strlen(name) + 1 ? 0xBF /* .ELONG */ : 0;
 						}
-						else if(cpm_version >= X80_CPM_3)
+						else if(!(cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_CPM_28)
 						{
+							/* C_MODE */
 							// TODO
+						}
+						else
+						{
 							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x6E:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* DSKCHK */
+							// TODO
+						}
+						else if(!(cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_CPM_28)
+						{
+							/* C_DELIMIT */
+							// TODO
 						}
 						else
 						{
@@ -1935,6 +3091,7 @@ int main(int argc, char * argv[])
 					case 0x6F:
 						if(msx_dos_version != 0)
 						{
+							/* DOSVER */
 							cpu->a = 0;
 							if(msx_dos_version < 0x0200)
 							{
@@ -1946,10 +3103,467 @@ int main(int argc, char * argv[])
 								cpu->de = msx_dos_version;
 							}
 						}
-						else if(cpm_version >= X80_CPM_3)
+						else if(!(cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_CPM_28)
 						{
+							/* C_WRITEBLK */
 							// TODO
+						}
+						else
+						{
 							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x70:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							/* REDIR */
+							// TODO
+						}
+						else if(!(cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_CPM_28)
+						{
+							/* L_WRITEBLK */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x71:
+						if(cpm_version == X80_CPM_28)
+						{
+							/* Direct screen functions */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x7C:
+						if(cpm_version == X80_CPM_28)
+						{
+							/* Byte block copy */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x7D:
+						if(cpm_version == X80_CPM_28)
+						{
+							/* Byte block alter */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x80:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* M_ALLOC - Absolute memory request */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x81:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* M_ALLOC - Relocatable memory request */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x82:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* M_FREE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x83:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* DEV_POLL */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x84:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* DEV_WAITFLAG */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x85:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* DEV_SETFLAG */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x86:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* Q_MAKE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x87:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* Q_OPEN */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x88:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* Q_DELETE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x89:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* Q_READ */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x8A:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* Q_CREAD */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x8B:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* Q_WRITE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x8C:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* Q_CWRITE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x8D:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* P_DELAY */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x8E:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* P_DISPATCH */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x8F:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* P_TERM */
+							exit(0);
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x90:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* P_CREATE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x91:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* P_PRIORITY */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x92:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* C_ATTACH */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x93:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* C_DETACH */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x94:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* C_SET */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x95:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* C_ASSIGN */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x96:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* P_CLI */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x97:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* P_RPL */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x98:
+						if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
+						{
+							/* F_PARSE */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x99:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* C_GET */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x9A:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* S_SYSDAT */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x9B:
+						if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							/* T_SECONDS */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x9C:
+						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
+						{
+							/* P_PDADR */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x9D:
+						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
+						{
+							/* P_ABORT */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x9E:
+						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
+						{
+							/* L_ATTACH */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x9F:
+						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
+						{
+							/* L_DETACH */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0xA0:
+						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
+						{
+							/* L_SET */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0xA1:
+						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
+						{
+							/* L_CATTACH */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0xA2:
+						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
+						{
+							/* C_CATTACH */
+							// TODO
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0xA3:
+						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
+						{
+							/* S_OSVER */
+							cpu->a = cpu->l = mpm_version;
+							cpu->b = cpu->h = cpm_version_flags;
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0xA4:
+						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
+						{
+							/* L_GET */
+							// TODO
 						}
 						else
 						{
@@ -1959,16 +3573,22 @@ int main(int argc, char * argv[])
 					default:
 					unimplemented_bdos_call:
 						fprintf(stderr, "Unimplemented (BDOS %02X)\n", creg);
-						if(cpm_version >= X80_CPM_20)
+						if(msx_dos_version >= 0x0200)
 						{
+							cpu->a = 0xDC /* .IBDOS */;
 							cpu->hl = 0;
-							cpu->a = cpu->l;
-							cpu->b = cpu->h;
+						}
+						else if((cpm_version_flags & X80_MPM_FLAG))
+						{
+							cpu->a = cpu->b = 0xFF;
+							cpu->hl = 0xFFFF;
 						}
 						else
 						{
-							cpu->a = 0;
-							cpu->b = 0;
+							// versions 1.x seem to crash on invalid calls
+							cpu->hl = 0;
+							cpu->a = cpu->l;
+							cpu->b = cpu->h;
 						}
 						break;
 					}
