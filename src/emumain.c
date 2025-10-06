@@ -33,14 +33,80 @@ static inline page_t * fetch_page(address_t address)
 	return memory[address];
 }
 
+static inline uint32_t get_address_mask(x80_state_t * cpu)
+{
+	switch(cpu->cpu_type)
+	{
+	case X80_CPU_I8008:
+	case X80_CPU_DP2200V1:
+	case X80_CPU_DP2200V2:
+		return 0x00003FFF;
+	default:
+		return 0xFFFF;
+	case X80_CPU_VM1:
+		return 0x0001FFFF;
+	case X80_CPU_Z180:
+		return 0x000FFFFF;
+	case X80_CPU_Z800:
+	case X80_CPU_Z280:
+	case X80_CPU_EZ80:
+		return 0x00FFFFFF;
+	case X80_CPU_Z380:
+		return 0xFFFFFFFF;
+	}
+}
+
 static uint8_t memory_readbyte(x80_state_t * cpu, address_t address)
 {
-	return (*fetch_page(address))[address & 0xFFFF];
+	address &= get_address_mask(cpu);
+	return (*fetch_page(address))[address];
 }
 
 static void memory_writebyte(x80_state_t * cpu, address_t address, uint8_t value)
 {
+	address &= get_address_mask(cpu);
 	(*fetch_page(address))[address] = value;
+}
+
+static inline uint32_t x80_advance_pc(x80_state_t * cpu, size_t count)
+{
+	uint32_t pc = cpu->pc;
+	uint32_t mask = -1;
+	switch(cpu->cpu_type)
+	{
+	case X80_CPU_I8008:
+	case X80_CPU_DP2200V1:
+	case X80_CPU_DP2200V2:
+		mask = 0x3FFF;
+		break;
+
+	default:
+		mask = 0xFFFF;
+		break;
+
+	case X80_CPU_EZ80:
+		if(cpu->ez80.adl)
+		{
+			mask = 0xFFFFFF;
+		}
+		else
+		{
+			mask = 0x00FFFF;
+		}
+		break;
+
+	case X80_CPU_Z380:
+		if(!(cpu->z380.sr & X80_Z380_SR_XM))
+		{
+			// the high 16 bits of PC get cleared as well
+			mask = 0xFFFF;
+		}
+		break;
+	}
+
+	pc &= mask;
+	cpu->pc = (cpu->pc + count) & mask;
+	return pc;
 }
 
 enum state
@@ -67,26 +133,26 @@ address_t x80_get_address(x80_state_t * cpu, address_t address, x80_access_type_
 	switch(cpu->cpu_type)
 	{
 	case X80_CPU_I80:
-		return i80_get_address(cpu, address, access);
+		return i80_get_address(cpu, address, access | X80_ACCESS_MODE_DEBUG);
 	case X80_CPU_I85:
-		return i85_get_address(cpu, address, access);
+		return i85_get_address(cpu, address, access | X80_ACCESS_MODE_DEBUG);
 	case X80_CPU_VM1:
-		return vm1_get_address(cpu, address, access);
+		return vm1_get_address(cpu, address, access | X80_ACCESS_MODE_DEBUG);
 	case X80_CPU_SM83:
-		return sm83_get_address(cpu, address, access);
+		return sm83_get_address(cpu, address, access | X80_ACCESS_MODE_DEBUG);
 	case X80_CPU_Z80:
-		return z80_get_address(cpu, address, access);
+		return z80_get_address(cpu, address, access | X80_ACCESS_MODE_DEBUG);
 	case X80_CPU_Z180:
-		return z180_get_address(cpu, address, access);
+		return z180_get_address(cpu, address, access | X80_ACCESS_MODE_DEBUG);
 	case X80_CPU_Z280:
 	case X80_CPU_Z800:
-		return z280_get_address(cpu, address, access);
+		return z280_get_address(cpu, address, access | X80_ACCESS_MODE_DEBUG);
 	case X80_CPU_Z380:
-		return z380_get_address(cpu, address, access);
+		return z380_get_address(cpu, address, access | X80_ACCESS_MODE_DEBUG);
 	case X80_CPU_EZ80:
-		return ez80_get_address(cpu, address, access);
+		return ez80_get_address(cpu, address, access | X80_ACCESS_MODE_DEBUG);
 	case X80_CPU_R800:
-		return r800_get_address(cpu, address, access);
+		return r800_get_address(cpu, address, access | X80_ACCESS_MODE_DEBUG);
 	default:
 		assert(false);
 	}
@@ -95,26 +161,45 @@ address_t x80_get_address(x80_state_t * cpu, address_t address, x80_access_type_
 
 uint8_t x80_readbyte(x80_state_t * cpu, address_t address)
 {
-	return cpu->read_byte(cpu, x80_get_address(cpu, address, X80_ACCESS_TYPE_READ | X80_ACCESS_MODE_DEBUG));
+	return cpu->read_byte(cpu, x80_get_address(cpu, address, X80_ACCESS_TYPE_READ));
+}
+
+address_t x80_readword(x80_state_t * cpu, address_t address, size_t bytes)
+{
+	address_t value = 0;
+	for(size_t i = 0; i < bytes; i++)
+	{
+		value |= x80_readbyte(cpu, address + i) << (i << 3);
+	}
+	return value;
 }
 
 uint8_t x80_readbyte_exec(x80_state_t * cpu, address_t address)
 {
-	return cpu->read_byte(cpu, x80_get_address(cpu, address, X80_ACCESS_TYPE_FETCH | X80_ACCESS_MODE_DEBUG));
+	return cpu->read_byte(cpu, x80_get_address(cpu, address, X80_ACCESS_TYPE_FETCH));
+}
+
+address_t x80_readword_exec(x80_state_t * cpu, address_t address, size_t bytes)
+{
+	address_t value = 0;
+	for(size_t i = 0; i < bytes; i++)
+	{
+		value |= x80_readbyte_exec(cpu, address + i) << (i << 3);
+	}
+	return value;
 }
 
 void x80_writebyte(x80_state_t * cpu, address_t address, uint8_t value)
 {
-	cpu->write_byte(cpu, x80_get_address(cpu, address, X80_ACCESS_TYPE_WRITE | X80_ACCESS_MODE_DEBUG), value);
+	cpu->write_byte(cpu, x80_get_address(cpu, address, X80_ACCESS_TYPE_WRITE), value);
 }
 
-address_t x80_readword_exec(x80_state_t * cpu, size_t bytes, address_t address)
+void x80_writeword(x80_state_t * cpu, address_t address, size_t bytes, address_t value)
 {
-	size_t i;
-	address_t value = 0;
-	for(i = 0; i < bytes; i++)
-		value |= x80_readbyte_exec(cpu, address + i) << (i << 3);
-	return value;
+	for(size_t i = 0; i < bytes; i++)
+	{
+		x80_writebyte(cpu, address + i, value >> (i << 3));
+	}
 }
 
 #define USEASLIB
@@ -635,7 +720,7 @@ FILE * open_prl_file(const char * filename)
 	return fp;
 }
 
-address_t load_cpm_file(const char * filename)
+address_t load_cpm_file(x80_state_t * cpu, const char * filename)
 {
 	FILE * fp;
 	int isprl = 0;
@@ -658,7 +743,7 @@ address_t load_cpm_file(const char * filename)
 	else
 	{
 		size_t length = strlen(filename);
-		if(length >= 4 && (memcmp(filename + length - 4, ".prl", 4) == 0 || memcmp(filename + length - 4, ".PRL", 4) == 0))
+		if(length >= 4 && (strncasecmp(filename + length - 4, ".prl", 4) == 0))
 		{
 			isprl = 1;
 		}
@@ -667,21 +752,32 @@ address_t load_cpm_file(const char * filename)
 	if(isprl)
 	{
 		/* TODO */
+		fprintf(stderr, "TODO: PRL executables not yet supported\n");
+		fclose(fp);
 		return 0;
 	}
 	else
 	{
-		page_t * page = fetch_page(0);
-		size_t count = fread(&(*page)[0x0100], 1, 0x0100, fp);
-		if(count == 0x0100 && (*page)[0x0100] == 0xC9)
+		int byte = fgetc(fp);
+		if(byte == 0xC9)
 		{
 			/* TODO */
+			fprintf(stderr, "TODO: CP/M Plus executables not yet supported\n");
 			return 0;
 		}
-		else if(count == 0x0100)
+		else
 		{
-			fread(&(*page)[0x0200], 1, 0xFC00, fp);
+			uint32_t address = 0x0100;
+			x80_writebyte(cpu, address, byte);
+			while(true)
+			{
+				byte = fgetc(fp);
+				if(byte == -1)
+					break;
+				x80_writebyte(cpu, ++address, byte);
+			}
 		}
+		fclose(fp);
 		return 0x0000;
 	}
 }
@@ -1203,6 +1299,13 @@ int main(int argc, char * argv[])
 	}
 	address_t zero_page = 0;
 	bool loaded_file;
+
+	cpu = malloc(sizeof(x80_state_t));
+	cpu->cpu_type = cpu_type;
+	cpu->read_byte = memory_readbyte;
+	cpu->write_byte = memory_writebyte;
+	cpu_reset(cpu);
+
 	if(i >= argc)
 	{
 		fprintf(stderr, "Warning: no command given\n");
@@ -1212,39 +1315,38 @@ int main(int argc, char * argv[])
 	}
 	else
 	{
-		zero_page = load_cpm_file(argv[i++]);
+		zero_page = load_cpm_file(cpu, argv[i++]);
 		loaded_file = true;
 	}
-	page_t * page = fetch_page(0);
-	(*page)[zero_page + 0x00] = 0xC3; /* jmp */
-	*(uint16_t *)&(*page)[zero_page + 0x01] = 0xFF03;
-	(*page)[zero_page + 0x05] = 0xC3; /* jmp */
-	*(uint16_t *)&(*page)[zero_page + 0x06] = 0xFE06;
-	(*page)[0xFE06] = 0x64; /* special instruction */
-	(*page)[0xFE07] = 0x64;
-	(*page)[0xFE08] = 0;
-	(*page)[0xFE09] = 0xC9; /* ret */
+
+	// set up warm boot
+	x80_writebyte(cpu, zero_page + 0x00,    0xC3); /* jmp */
+	x80_writeword(cpu, zero_page + 0x01, 2, 0xFF03);
+	// set up BDOS entry
+	x80_writebyte(cpu, zero_page + 0x05,    0xC3); /* jmp */
+	x80_writeword(cpu, zero_page + 0x06, 2, 0xFE06);
+
+	// BDOS entry point
+	x80_writeword(cpu, 0xFE06,           2, 0x6464); /* special instruction */
+	x80_writebyte(cpu, 0xFE08,              0); /* BDOS emulation */
+	x80_writebyte(cpu, 0xFE09,              0xC9); /* ret */
+
+	// BIOS entry points
 	for(i = 0; i < 16; i++)
 	{
-		(*page)[0xFF00 + 3 * i] = 0xC3; /* jmp */
-		*(uint16_t *)&(*page)[0xFF00 + 3 * i + 1] = 0xFF80 + 4 * i;
-		(*page)[0xFF80 + 4 * i] = 0x64; /* special */
-		(*page)[0xFF80 + 4 * i + 1] = 0x64;
-		(*page)[0xFF80 + 4 * i + 2] = 1 + i;
-		(*page)[0xFF80 + 4 * i + 3] = 0xC9; /* ret */
+		// jump table entry
+		x80_writebyte(cpu, 0xFF00 + 3 * i,        0xC3); /* jmp */
+		x80_writeword(cpu, 0xFF00 + 3 * i + 1, 2, 0xFF80 + 4 * i);
+		x80_writeword(cpu, 0xFF80 + 4 * i,     2, 0x6464); /* special */
+		x80_writebyte(cpu, 0xFF80 + 4 * i + 2,    1 + i); /* BIOS function #i emulation */
+		x80_writebyte(cpu, 0xFF80 + 4 * i + 3,    0xC9); /* ret */
 	}
-
-	cpu = malloc(sizeof(x80_state_t));
-	cpu->cpu_type = cpu_type;
-	cpu->read_byte = memory_readbyte;
-	cpu->write_byte = memory_writebyte;
-	cpu_reset(cpu);
 
 	if(loaded_file)
 	{
 		uint16_t sp = 0xFE00 - 2;
 		cpu->sp = sp;
-		*(uint16_t *)&(*page)[sp] = 0;
+		x80_writeword(cpu, sp, 2, 0);
 		cpu->pc = zero_page + 0x0100;
 	}
 
@@ -1277,12 +1379,10 @@ int main(int argc, char * argv[])
 		if(setjmp(cpu->exc) == 0)
 			step(cpu, do_disasm);
 
-		address_t pc = cpu->pc;
-		if(x80_readword_exec(cpu, 2, pc) == 0x6464)
+		if(x80_readword_exec(cpu, cpu->pc, 2) == 0x6464)
 		{
-			pc = cpu->pc += 2; // SETADDR(pc, pc + 2);
-			int code = x80_readbyte_exec(cpu, pc);
-			pc = cpu->pc += 1; // SETADDR(pc, pc + 1);
+			x80_advance_pc(cpu, 2);
+			int code = x80_readbyte_exec(cpu, x80_advance_pc(cpu, 1));
 			uint8_t creg = cpu->bc & 0xFF;
 			switch(code)
 			{

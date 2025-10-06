@@ -582,12 +582,6 @@ extern const int cpu_asm[];
 extern const int cpu_dasm[];
 #define CPU_DASM(cpu) (cpu_dasm[(cpu)->cpu_type])
 
-uint8_t x80_readbyte(x80_state_t * cpu, address_t address);
-uint8_t x80_readbyte_exec(x80_state_t * cpu, address_t address);
-address_t x80_readword_exec(x80_state_t * cpu, size_t bytes, address_t address);
-uint8_t x80_readbyte_debug(x80_state_t * cpu, address_t address);
-uint8_t x80_readbyte_exec_debug(x80_state_t * cpu, address_t address);
-void x80_writebyte_debug(x80_state_t * cpu, address_t address, uint8_t value);
 bool x80_step(x80_state_t * cpu, bool do_disasm);
 
 #define GETHI(r) (((r) >> 8) & 0xFF)
