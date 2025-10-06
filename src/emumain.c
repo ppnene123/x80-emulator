@@ -718,16 +718,31 @@ enum
 
 enum
 {
+	// For most of these, the exact version number is reported when calling BDOS function call 6, except for the first three entries
+	// CP/M 1975 source from the Computer History Museum, version 1.0 assigned for lack of better alternatives
 	X80_CPM_10 = 0x0010,
+	// CP/M 1.3
 	X80_CPM_13 = 0x0013,
+	// CP/M 1.4
 	X80_CPM_14 = 0x0014,
+	// CP/M 2.0
 	X80_CPM_20 = 0x0020,
+	// CP/M 2.2
 	X80_CPM_22 = 0x0022,
-	X80_MPM_10 = 0x0122,
-	X80_MPM_20 = 0x0130,
-	X80_CPM_31 = 0x0031,
+	// MP/M 1
+	X80_MPM_1  = 0x0122,
+	// MP/M II
+	X80_MPM_2  = 0x0130,
+	// CP/M Plus
+	X80_CPM_3  = 0x0031,
+
+	// MSX-DOS 1.00
+	X80_MSXDOS_1 = 0x0100,
+	// MSX-DOS 2.20
+	X80_MSXDOS_2 = 0x0220,
 };
-static uint16_t cpm_version = X80_CPM_31;
+static uint16_t cpm_version = X80_CPM_3;
+static uint16_t msx_dos_version = 0;
 
 FILE * open_com_file(const char * filename)
 {
@@ -1421,6 +1436,52 @@ void process_command(int cmd)
 	}
 }
 
+struct msx_dos_environment_item
+{
+	char * name;
+	char * value;
+};
+
+struct msx_dos_environment
+{
+	uint16_t item_count;
+	struct msx_dos_environment_item * items;
+} msx_dos_environment;
+
+static inline void msx_dos_environment_put(const char * name, const char * value)
+{
+	msx_dos_environment.item_count ++;
+	msx_dos_environment.items = msx_dos_environment.items ? realloc(msx_dos_environment.items, msx_dos_environment.item_count * sizeof(struct msx_dos_environment_item)) : malloc(msx_dos_environment.item_count * sizeof(struct msx_dos_environment_item));
+	msx_dos_environment.items[msx_dos_environment.item_count - 1].name = strdup(name);
+	msx_dos_environment.items[msx_dos_environment.item_count - 1].value = strdup(value);
+}
+
+static inline void msx_dos_environment_set(const char * name, const char * value)
+{
+	for(uint16_t index = 0; index < msx_dos_environment.item_count; index++)
+	{
+		if(strcmp(msx_dos_environment.items[index].name, name) == 0)
+		{
+			free(msx_dos_environment.items[index].value);
+			msx_dos_environment.items[index].value = strdup(value);
+			return;
+		}
+	}
+	msx_dos_environment_put(name, value);
+}
+
+static inline char * msx_dos_environment_get(const char * name)
+{
+	for(uint16_t index = 0; index < msx_dos_environment.item_count; index++)
+	{
+		if(strcmp(msx_dos_environment.items[index].name, name) == 0)
+		{
+			return msx_dos_environment.items[index].value;
+		}
+	}
+	return "";
+}
+
 int main(int argc, char * argv[])
 {
 	int argi;
@@ -1481,17 +1542,34 @@ int main(int argc, char * argv[])
 					|| strcasecmp(&argv[argi][2], "cpm3") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
-					cpm_version = X80_CPM_31;
+					cpm_version = X80_CPM_3;
 				}
 				else if(strcasecmp(&argv[argi][2], "mpm1") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
-					cpm_version = X80_MPM_10;
+					cpm_version = X80_MPM_1;
 				}
 				else if(strcasecmp(&argv[argi][2], "mpm2") == 0)
 				{
 					system_type = X80_SYSTEM_CPM;
-					cpm_version = X80_MPM_20;
+					cpm_version = X80_MPM_2;
+				}
+				else if(strcasecmp(&argv[argi][2], "msxdos10") == 0
+					|| strcasecmp(&argv[argi][2], "msxdos1") == 0
+					|| strcasecmp(&argv[argi][2], "msx1") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = X80_CPM_22;
+					msx_dos_version = X80_MSXDOS_1;
+				}
+				else if(strcasecmp(&argv[argi][2], "msxdos20") == 0
+					|| strcasecmp(&argv[argi][2], "msxdos2") == 0
+					|| strcasecmp(&argv[argi][2], "msx2") == 0
+					|| strcasecmp(&argv[argi][2], "msx") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = X80_CPM_22;
+					msx_dos_version = X80_MSXDOS_2;
 				}
 				break;
 			case 'c':
@@ -1620,7 +1698,10 @@ int main(int argc, char * argv[])
 				break;
 			for(int j = 0; argv[i][j] != 0; j++)
 			{
-				x80_writebyte(cpu, pointer++, toupper(argv[i][j]));
+				char c = argv[i][j];
+				if(msx_dos_version == 0)
+					c = toupper(c);
+				x80_writebyte(cpu, pointer++, c);
 				if(pointer >= 0x100)
 					break;
 			}
@@ -1629,6 +1710,34 @@ int main(int argc, char * argv[])
 		}
 
 		x80_writebyte(cpu, 0x80, pointer - 0x81);
+
+		if(msx_dos_version >= 0x0200)
+		{
+			if(argi + 1 < argc)
+			{
+				size_t args_length = 0;
+				for(int i = argi + 1; i < argc; i++)
+				{
+					args_length += 1 + strlen(argv[i]);
+				}
+				char * parameters = malloc(args_length);
+				parameters[0] = '\0';
+				for(int i = argi + 1; i < argc; i++)
+				{
+					strcat(parameters, " ");
+					strcat(parameters, argv[i]);
+				}
+				msx_dos_environment_set("PARAMETERS", parameters);
+				free(parameters);
+			}
+
+			// TODO: improve this format
+			char * program = malloc(strlen(argv[argi]) + 4);
+			strcpy(program, "A:\\");
+			strcat(program, argv[argi]);
+			msx_dos_environment_set("PROGRAM", program);
+			free(program);
+		}
 	}
 
 	while(true)
@@ -1721,7 +1830,134 @@ int main(int argc, char * argv[])
 							}
 						}
 						break;
+					case 0x20:
+						if(msx_dos_version != 0)
+						{
+							cpu->a = 0;
+						}
+						else if(cpm_version >= X80_CPM_20)
+						{
+							if(cpu->e == 0xFF)
+							{
+								cpu->l = cpu->a = x80_readbyte(cpu, 0x0004) >> 4;
+							}
+							else
+							{
+								x80_writebyte(cpu, 0x0004, (cpu->e << 4) | (x80_readbyte(cpu, 0x0004) & 0x0F));
+							}
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x6B:
+						if(msx_dos_version != 0)
+						{
+							char buffer[255];
+							for(uint8_t i = 0; ; i++)
+							{
+								buffer[i] = x80_readbyte(cpu, cpu->hl + i);
+								if(buffer[i] == '\0')
+									break;
+								if(i == 254)
+								{
+									cpu->a = 0xC0 /* .IENV */;
+									goto end_6B;
+								}
+							}
+							char * value = msx_dos_environment_get(buffer);
+							for(uint8_t i = 0; i < cpu->b; i++)
+							{
+								x80_writebyte(cpu, cpu->de + i, value[i]);
+								if(value[i] == 0)
+									break;
+							}
+							cpu->a = cpu->b < strlen(value) + 1 ? 0xBF /* .ELONG */ : 0;
+						}
+						else if(cpm_version >= X80_MPM_2)
+						{
+							// TODO
+							goto unimplemented_bdos_call;
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+					end_6B:
+						break;
+					case 0x6C:
+						if(msx_dos_version != 0)
+						{
+							// TODO
+							goto unimplemented_bdos_call;
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							// TODO
+							goto unimplemented_bdos_call;
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x6D:
+						if(msx_dos_version != 0)
+						{
+							char * name;
+							if(cpu->de == 0 || cpu->de > msx_dos_environment.item_count)
+							{
+								name = "";
+							}
+							else
+							{
+								name = msx_dos_environment.items[cpu->de - 1].name;
+							}
+							for(uint8_t i = 0; i < cpu->b; i++)
+							{
+								x80_writebyte(cpu, cpu->hl + i, name[i]);
+								if(name[i] == 0)
+									break;
+							}
+							cpu->a = cpu->b < strlen(name) + 1 ? 0xBF /* .ELONG */ : 0;
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							// TODO
+							goto unimplemented_bdos_call;
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
+					case 0x6F:
+						if(msx_dos_version != 0)
+						{
+							cpu->a = 0;
+							if(msx_dos_version < 0x0200)
+							{
+								cpu->b = 0;
+							}
+							else
+							{
+								cpu->bc = msx_dos_version;
+								cpu->de = msx_dos_version;
+							}
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							// TODO
+							goto unimplemented_bdos_call;
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
 					default:
+					unimplemented_bdos_call:
 						fprintf(stderr, "Unimplemented (BDOS %02X)\n", creg);
 						if(cpm_version >= X80_CPM_20)
 						{
