@@ -688,6 +688,15 @@ int main()
 }
 #endif
 
+enum
+{
+	X80_SYSTEM_NONE,
+	X80_SYSTEM_CPM,
+	X80_SYSTEM_UZI,
+} system_type = X80_SYSTEM_CPM;
+
+static uint16_t cpm_version = 0x0031;
+
 FILE * open_com_file(const char * filename)
 {
 	FILE * fp;
@@ -1229,6 +1238,55 @@ int main(int argc, char * argv[])
 				emulator_state = STATE_WAITING;
 				do_debug = true;
 				break;
+			case 'S':
+				if(strcasecmp(&argv[i][2], "cpm") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+				}
+				else if(strcasecmp(&argv[i][2], "cpm10") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = 0x0010;
+				}
+				else if(strcasecmp(&argv[i][2], "cpm13") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = 0x0013;
+				}
+				else if(strcasecmp(&argv[i][2], "cpm14") == 0
+					|| strcasecmp(&argv[i][2], "cpm1") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = 0x0014;
+				}
+				else if(strcasecmp(&argv[i][2], "cpm20") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = 0x0020;
+				}
+				else if(strcasecmp(&argv[i][2], "cpm22") == 0
+					|| strcasecmp(&argv[i][2], "cpm2") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = 0x0022;
+				}
+				else if(strcasecmp(&argv[i][2], "cpm31") == 0
+					|| strcasecmp(&argv[i][2], "cpm3") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = 0x0031;
+				}
+				else if(strcasecmp(&argv[i][2], "mpm1") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = 0x0122;
+				}
+				else if(strcasecmp(&argv[i][2], "mpm2") == 0)
+				{
+					system_type = X80_SYSTEM_CPM;
+					cpm_version = 0x0130;
+				}
+				break;
 			case 'c':
 				if(strcasecmp(&argv[i][2], "i8080") == 0
 				|| strcasecmp(&argv[i][2], "8080") == 0
@@ -1319,27 +1377,30 @@ int main(int argc, char * argv[])
 		loaded_file = true;
 	}
 
-	// set up warm boot
-	x80_writebyte(cpu, zero_page + 0x00,    0xC3); /* jmp */
-	x80_writeword(cpu, zero_page + 0x01, 2, 0xFF03);
-	// set up BDOS entry
-	x80_writebyte(cpu, zero_page + 0x05,    0xC3); /* jmp */
-	x80_writeword(cpu, zero_page + 0x06, 2, 0xFE06);
-
-	// BDOS entry point
-	x80_writeword(cpu, 0xFE06,           2, 0x6464); /* special instruction */
-	x80_writebyte(cpu, 0xFE08,              0); /* BDOS emulation */
-	x80_writebyte(cpu, 0xFE09,              0xC9); /* ret */
-
-	// BIOS entry points
-	for(i = 0; i < 16; i++)
+	if(system_type == X80_SYSTEM_CPM)
 	{
-		// jump table entry
-		x80_writebyte(cpu, 0xFF00 + 3 * i,        0xC3); /* jmp */
-		x80_writeword(cpu, 0xFF00 + 3 * i + 1, 2, 0xFF80 + 4 * i);
-		x80_writeword(cpu, 0xFF80 + 4 * i,     2, 0x6464); /* special */
-		x80_writebyte(cpu, 0xFF80 + 4 * i + 2,    1 + i); /* BIOS function #i emulation */
-		x80_writebyte(cpu, 0xFF80 + 4 * i + 3,    0xC9); /* ret */
+		// set up warm boot
+		x80_writebyte(cpu, zero_page + 0x00,    0xC3); /* jmp */
+		x80_writeword(cpu, zero_page + 0x01, 2, 0xFF03);
+		// set up BDOS entry
+		x80_writebyte(cpu, zero_page + 0x05,    0xC3); /* jmp */
+		x80_writeword(cpu, zero_page + 0x06, 2, 0xFE06);
+
+		// BDOS entry point
+		x80_writeword(cpu, 0xFE06,           2, 0x6464); /* special instruction */
+		x80_writebyte(cpu, 0xFE08,              0); /* BDOS emulation */
+		x80_writebyte(cpu, 0xFE09,              0xC9); /* ret */
+
+		// BIOS entry points
+		for(i = 0; i < 16; i++)
+		{
+			// jump table entry
+			x80_writebyte(cpu, 0xFF00 + 3 * i,        0xC3); /* jmp */
+			x80_writeword(cpu, 0xFF00 + 3 * i + 1, 2, 0xFF80 + 4 * i);
+			x80_writeword(cpu, 0xFF80 + 4 * i,     2, 0x6464); /* special */
+			x80_writebyte(cpu, 0xFF80 + 4 * i + 2,    1 + i); /* BIOS function #i emulation */
+			x80_writebyte(cpu, 0xFF80 + 4 * i + 3,    0xC9); /* ret */
+		}
 	}
 
 	if(loaded_file)
@@ -1387,66 +1448,76 @@ int main(int argc, char * argv[])
 			switch(code)
 			{
 			case 0:
-				/* BDOS */
-				if(do_debug)
+				if(system_type == X80_SYSTEM_CPM)
 				{
-					fprintf(stderr, "BDOS(%02X)\n", creg);
-				}
-				switch(creg)
-				{
-				case 0x00:
-					exit(0);
-					break;
-				case 0x01:
+					/* BDOS */
+					if(do_debug)
 					{
-						int c = getchar();
-						cpu->af = (cpu->af & 0xFF) | (c << 8);
-						cpu->hl = (cpu->hl & ~0xFF) | (c & 0xFF);
+						fprintf(stderr, "BDOS(%02X)\n", creg);
 					}
-					break;
-				case 0x02:
-					putchar(cpu->de & 0xFF);
-					break;
-				case 0x09:
-					for(i = 0; i < 0x10000; i++)
+					switch(creg)
 					{
-						int c = x80_readbyte(cpu, cpu->de + i);
-						if(c == '$')
-							break;
-						putchar(c);
+					case 0x00:
+						exit(0);
+						break;
+					case 0x01:
+						{
+							int c = getchar();
+							cpu->a = c;
+							if(cpm_version >= 0x0020)
+								cpu->l = c;
+						}
+						break;
+					case 0x02:
+						putchar(cpu->de & 0xFF);
+						break;
+					case 0x09:
+						for(i = 0; i < 0x10000; i++)
+						{
+							int c = x80_readbyte(cpu, cpu->de + i);
+							if(c == '$')
+								break;
+							putchar(c);
+						}
+						break;
+					case 0x0C:
+						{
+							uint16_t version = cpm_version < 0x0020 ? cpm_version : 0;
+							cpu->hl = version;
+							if(cpm_version >= 0x0014)
+							{
+								cpu->a = cpu->l;
+								cpu->b = cpu->h;
+							}
+						}
+						break;
+					default:
+						fprintf(stderr, "Unimplemented (BDOS %02X)\n", creg);
+						exit(1);
 					}
-					break;
-				case 0x0C:
-					{
-						uint16_t version = 0x0031; /* CP/M 3 */
-						cpu->hl = version;
-						cpu->af = (cpu->af & 0xFF) | (version << 8);
-						cpu->bc = (cpu->bc & 0xFF) | (version & ~0xFF);
-					}
-					break;
-				default:
-					fprintf(stderr, "Unimplemented (BDOS %02X)\n", creg);
-					exit(1);
 				}
 				break;
 			default:
-				if(do_debug)
+				if(system_type == X80_SYSTEM_CPM)
 				{
-					fprintf(stderr, "BIOS(%d)\n", code - 1);
-				}
-				switch(code)
-				{
-				case 1:
-					/* BOOT */
-					exit(0);
-					break;
-				case 2:
-					/* WBOOT */
-					exit(0);
-					break;
-				default:
-					fprintf(stderr, "Unimplemented (BIOS %d)\n", code - 1);
-					exit(1);
+					if(do_debug)
+					{
+						fprintf(stderr, "BIOS(%d)\n", code - 1);
+					}
+					switch(code)
+					{
+					case 1:
+						/* BOOT */
+						exit(0);
+						break;
+					case 2:
+						/* WBOOT */
+						exit(0);
+						break;
+					default:
+						fprintf(stderr, "Unimplemented (BIOS %d)\n", code - 1);
+						exit(1);
+					}
 				}
 				break;
 			}
