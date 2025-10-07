@@ -23,6 +23,7 @@ typedef   signed int       ssize_t;
 typedef unsigned int        size_t;
 
 noreturn void exit(int status) __smallc;
+ssize_t read(int fd, void * buf, size_t count) __smallc;
 ssize_t write(int fd, const void * buf, size_t count) __smallc;
 size_t strlen(const char * s);
 void putstr(const char * s);

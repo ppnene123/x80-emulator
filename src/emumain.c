@@ -4041,7 +4041,7 @@ int main(int argc, char * argv[], char * envp[])
 							{
 								for(uint16_t offset = 0; offset < count && offset < cpu->hl; offset++)
 								{
-									buffer[offset] = x80_readbyte(cpu, buf + offset);
+									x80_writebyte(cpu, buf + offset, buffer[offset]);
 								}
 							}
 							free(buffer);

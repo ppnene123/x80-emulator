@@ -12,6 +12,7 @@ __asm;
 	call	_exit
 __endasm;
 #define DEFSYSCALL(name, number) \
+	.globl	_##name \
 _##name: \
 	ld	hl, number \
 	push	hl \
@@ -21,6 +22,7 @@ _##name: \
 	ret
 __asm;
 	DEFSYSCALL(exit, 0)
+	DEFSYSCALL(read, 7)
 	DEFSYSCALL(write, 8)
 __endasm;
 }
