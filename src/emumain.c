@@ -42,7 +42,7 @@ static inline page_t * fetch_page(address_t address)
 	return memory[address];
 }
 
-static inline uint32_t get_address_mask(x80_state_t * cpu)
+static inline address_t get_address_mask(x80_state_t * cpu)
 {
 	switch(cpu->cpu_type)
 	{
@@ -77,10 +77,10 @@ static void memory_writebyte(x80_state_t * cpu, address_t address, uint8_t value
 	(*fetch_page(address))[address] = value;
 }
 
-static inline uint32_t x80_advance_pc(x80_state_t * cpu, size_t count)
+static inline address_t x80_advance_pc(x80_state_t * cpu, size_t count)
 {
-	uint32_t pc = cpu->pc;
-	uint32_t mask = -1;
+	address_t pc = cpu->pc;
+	address_t mask = -1;
 	switch(cpu->cpu_type)
 	{
 	case X80_CPU_I8008:
@@ -908,7 +908,7 @@ address_t load_prl_file(x80_state_t * cpu, FILE * input_file, address_t zero_pag
 // returns initial SP
 address_t load_com_file(x80_state_t * cpu, FILE * input_file)
 {
-	uint32_t address = 0x0100;
+	address_t address = 0x0100;
 	fseek(input_file, 0L, SEEK_SET);
 	while(true)
 	{
@@ -1051,6 +1051,48 @@ address_t load_cpm_file(x80_state_t * cpu, const char * filename, address_t load
 		fclose(fp);
 		return 0x0000;
 	}
+}
+
+address_t load_uzi_file(x80_state_t * cpu, const char * filename, address_t load_address)
+{
+	FILE * input_file;
+
+	input_file = fopen(filename, "rb");
+	if(input_file == NULL)
+	{
+		fprintf(stderr, "Unable to open file `%s'\n", filename);
+		exit(1);
+	}
+
+	if(load_address != 0x100)
+		fprintf(stderr, "Warning: load address 0x%X specified, ignored\n", load_address);
+
+	int byte = fgetc(input_file);
+	if(byte != 0xC3)
+	{
+		fprintf(stderr, "Invalid binary\n");
+		exit(1);
+	}
+
+	address_t address = 0x0100;
+	fseek(input_file, 0L, SEEK_SET);
+	while(true)
+	{
+		int byte = fgetc(input_file);
+		if(byte == -1)
+			break;
+		x80_writebyte(cpu, address++, byte);
+	}
+
+	address_t sp = 0xFE00;
+
+	sp -= 2;
+	cpu->sp = sp;
+	x80_writeword(cpu, sp, 2, 0);
+	cpu->pc = 0x0100;
+
+	fclose(input_file);
+	return 0x0000;
 }
 
 enum
@@ -1686,6 +1728,11 @@ int main(int argc, char * argv[])
 					cpm_version_flags = 0;
 					msx_dos_version = X80_MSXDOS_2;
 				}
+				else if(strcasecmp(&argv[argi][2], "uzi") == 0)
+				{
+					system_type = X80_SYSTEM_UZI;
+					cpm_version_flags = 0;
+				}
 				break;
 			case 'c':
 				if(strcasecmp(&argv[argi][2], "i8080") == 0
@@ -1772,7 +1819,19 @@ int main(int argc, char * argv[])
 	}
 	else
 	{
-		zero_page = load_cpm_file(cpu, argv[argi], load_address);
+		switch(system_type)
+		{
+		case X80_SYSTEM_NONE:
+		default:
+			fprintf(stderr, "Warning: no system type specified\n");
+			// fall through
+		case X80_SYSTEM_CPM:
+			zero_page = load_cpm_file(cpu, argv[argi], load_address);
+			break;
+		case X80_SYSTEM_UZI:
+			zero_page = load_uzi_file(cpu, argv[argi], load_address);
+			break;
+		}
 	}
 
 	address_t ccp_start = cpu->sp + 2; // TODO
@@ -1863,6 +1922,13 @@ int main(int argc, char * argv[])
 			msx_dos_environment_set("PROGRAM", program);
 			free(program);
 		}
+	}
+	else if(system_type == X80_SYSTEM_UZI)
+	{
+		// syscall entry point
+		x80_writeword(cpu, 0x0030,           2, 0x6464); /* special instruction */
+		x80_writebyte(cpu, 0x0032,              0x80); /* UZI emulation */
+		x80_writebyte(cpu, 0x0033,              0xC9); /* ret */
 	}
 
 	while(true)
@@ -3709,6 +3775,38 @@ int main(int argc, char * argv[])
 					}
 				}
 				break;
+			case 0x80:
+				if(system_type == X80_SYSTEM_UZI)
+				{
+					// UZI system call
+					uint16_t syscallnum = x80_readword(cpu, cpu->sp + 2, 2);
+					switch(syscallnum)
+					{
+					case 0x00:
+						exit(x80_readword(cpu, cpu->sp + 6, 2));
+						break;
+					case 0x08:
+						{
+							uint16_t fd = x80_readword(cpu, cpu->sp + 10, 2);
+							uint16_t buf = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t count = x80_readword(cpu, cpu->sp + 6, 2);
+
+							char * buffer = malloc(count);
+							for(uint16_t offset = 0; offset < count; offset++)
+							{
+								buffer[offset] = x80_readbyte(cpu, buf + offset);
+							}
+							cpu->hl = write(fd, buffer, count);
+							free(buffer);
+						}
+						break;
+					default:
+						fprintf(stderr, "Unimplemented UZI system call %04X\n", syscallnum);
+						exit(0);
+					}
+					break;
+				}
+				// fall through
 			default:
 				if(system_type == X80_SYSTEM_CPM)
 				{
