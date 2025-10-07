@@ -10,6 +10,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <termios.h>
+#include <poll.h>
+#include <unistd.h>
 #include "disassembler.h"
 #include "cpu/cpu.h"
 
@@ -694,6 +697,46 @@ int main()
 	return 0;
 }
 #endif
+
+//// terminal control
+
+bool kbd_is_init = false;
+struct termios kbd_old;
+
+void kbd_reset(void)
+{
+	if(!kbd_is_init)
+		return;
+	tcsetattr(0, TCSAFLUSH, &kbd_old);
+	kbd_is_init = false;
+}
+
+void kbd_init(void)
+{
+	struct termios kbd_new;
+	if(kbd_is_init)
+		return;
+	tcgetattr(0, &kbd_old);
+	kbd_is_init = true;
+	atexit(kbd_reset);
+	kbd_new = kbd_old;
+	cfmakeraw(&kbd_new);
+	kbd_new.c_oflag = kbd_old.c_oflag;
+	tcsetattr(0, TCSAFLUSH, &kbd_new);
+}
+
+int readchar(int fd)
+{
+	unsigned char c;
+	struct pollfd fds[1] = { { fd, POLLIN, 0 } };
+	if(poll(fds, 1, 0) <= 0 || (fds[0].revents & POLLIN) == 0)
+		return -1;
+	if(read(fd, &c, 1) < 1)
+		return -1;
+	return c;
+}
+
+//// file access
 
 uint8_t fread8(FILE * input_file)
 {
@@ -1675,7 +1718,6 @@ int main(int argc, char * argv[])
 	}
 
 	address_t zero_page = 0;
-//	bool loaded_file;
 
 	cpu = malloc(sizeof(x80_state_t));
 	cpu->cpu_type = cpu_type;
@@ -1686,18 +1728,19 @@ int main(int argc, char * argv[])
 	if(argi >= argc)
 	{
 		fprintf(stderr, "Warning: no command given\n");
-//		loaded_file = false;
 		emulator_state = STATE_WAITING;
 		do_debug = true;
 	}
 	else
 	{
 		zero_page = load_cpm_file(cpu, argv[argi], load_address);
-//		loaded_file = true;
 	}
 
 	if(system_type == X80_SYSTEM_CPM)
 	{
+		if(emulator_state == STATE_RUNNING)
+			kbd_init();
+
 		// set up warm boot
 		x80_writebyte(cpu, zero_page + 0x00,    0xC3); /* jmp */
 		x80_writeword(cpu, zero_page + 0x01, 2, 0xFF03);
@@ -1775,6 +1818,9 @@ int main(int argc, char * argv[])
 
 	while(true)
 	{
+
+#define DEBUG(...) do { if(do_debug) { fprintf(stderr, __VA_ARGS__); } } while(0)
+
 		if(emulator_state == STATE_RUNNING && cpu->pc == emulation_halt_pointer)
 		{
 			emulation_halt_pointer = -1;
@@ -1819,18 +1865,14 @@ int main(int argc, char * argv[])
 				if(system_type == X80_SYSTEM_CPM)
 				{
 					/* BDOS */
-					if(do_debug)
-					{
-						fprintf(stderr, "BDOS(%02X)\n", creg);
-					}
 					switch(creg)
 					{
 					case 0x00:
-						/* P_TERMCPM or TERM0 */
+						DEBUG("%s()\n", msx_dos_version ? "TERM0" : "P_TERMCPM");
 						exit(0);
 						break;
 					case 0x01:
-						/* C_READ or CONIN */
+						DEBUG("%s()\n", msx_dos_version ? "CONIN" : "C_READ");
 						{
 							int c = getchar();
 							cpu->a = c;
@@ -1839,46 +1881,46 @@ int main(int argc, char * argv[])
 						}
 						break;
 					case 0x02:
-						/* C_WRITE or CONOUT */
+						DEBUG("%s(E=%02X)\n", msx_dos_version ? "CONOUT" : "C_WRITE", cpu->e);
 						putchar(cpu->e);
 						break;
 					case 0x03:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* Raw console input */
+							DEBUG("raw console input()\n");
 							// TODO
 						}
 						else
 						{
-							/* A_READ or AUXIN */
+							DEBUG("%s()\n", msx_dos_version ? "AUXIN" : "A_READ");
 							// TODO
 						}
 						break;
 					case 0x04:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* Raw console output */
+							DEBUG("raw console output(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
 						{
-							/* A_WRITE or AUXOUT */
+							DEBUG("%s(E=%02X)\n", msx_dos_version ? "AUXOUT" : "A_WRITE", cpu->e);
 							// TODO
 						}
 						break;
 					case 0x05:
-						/* L_WRITE or LSTOUT */
+						DEBUG("%s(E=%02X)\n", msx_dos_version ? "LSTOUT" : "L_WRITE", cpu->e);
 						// TODO
 						break;
 					case 0x06:
 						if(cpm_version < X80_CPM_20)
 						{
-							/* Raw memory size */
+							DEBUG("raw memory size()\n");
 							// TODO
 						}
 						else
 						{
-							/* C_RAWIO or DIRIO */
+							DEBUG("%s(E=%02X)\n", msx_dos_version ? "DIRIO" : "C_RAWIO", cpu->e);
 							switch(cpu->e)
 							{
 							case 0xFF:
@@ -1912,21 +1954,22 @@ int main(int argc, char * argv[])
 					case 0x07:
 						if(msx_dos_version != 0)
 						{
-							/* DIRIN */
+							DEBUG("DIRIN()\n");
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							// not supported
+							DEBUG("unsupported(C=07)\n");
+							cpu->a = cpu->l = 0;
 						}
 						else if(cpm_version >= X80_CPM_3)
 						{
-							/* A_STATIN */
+							DEBUG("A_STATIN()\n");
 							// TODO
 						}
 						else
 						{
-							/* Get I/O byte */
+							DEBUG("get I/O byte()\n");
 							cpu->a = x80_readbyte(cpu, zero_page + 0x0003);
 							if(cpm_version >= X80_CPM_14)
 							{
@@ -1938,26 +1981,27 @@ int main(int argc, char * argv[])
 					case 0x08:
 						if(msx_dos_version != 0)
 						{
-							/* INNOE */
+							DEBUG("INNOE()\n");
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							// not supported
+							DEBUG("unsupported(C=07)\n");
+							cpu->a = cpu->l = 0;
 						}
 						else if(cpm_version >= X80_CPM_3)
 						{
-							/* A_STATOUT */
+							DEBUG("A_STATOUT()\n");
 							// TODO
 						}
 						else
 						{
-							/* Set I/O byte */
+							DEBUG("set I/O byte(E=%02X)\n", cpu->e);
 							x80_writebyte(cpu, zero_page + 0x0003, cpu->e);
 						}
 						break;
 					case 0x09:
-						/* C_WRITESTR or STROUT */
+						DEBUG("%s(DE=%04X)\n", msx_dos_version ? "STROUT" : "C_WRITESTR", cpu->de);
 						for(uint16_t i = 0; i < 0x10000; i++)
 						{
 							int c = x80_readbyte(cpu, cpu->de + i);
@@ -1967,16 +2011,16 @@ int main(int argc, char * argv[])
 						}
 						break;
 					case 0x0A:
-						/* C_READSTR or BUFIN */
+						DEBUG("%s(DE=%04X)\n", msx_dos_version ? "BUFIN" : "C_READSTR", cpu->de);
 						// TODO
 						break;
 					case 0x0B:
-						/* C_STAT or CONST */
+						DEBUG("%s()\n", msx_dos_version ? "CONST" : "C_STAT");
 						// TODO
 						break;
 					case 0x0C:
+						DEBUG("%s()\n", msx_dos_version ? "CPMVER" : cpm_version < X80_CPM_20 ? "lift head" : "S_BDOSVER");
 						{
-							/* S_BDOSVER or CPMVER, Lift head */
 							if(cpm_version >= X80_CPM_14)
 							{
 								cpu->a = cpu->l = cpm_version < X80_CPM_20 ? 0 : cpm_version;
@@ -1990,119 +2034,116 @@ int main(int argc, char * argv[])
 						}
 						break;
 					case 0x0D:
-						/* DRV_ALLRESET or DSKRST */
+						DEBUG("%s()\n", msx_dos_version ? "DSKRST" : "DRV_ALLRESET");
 						// TODO
 						break;
 					case 0x0E:
-						/* DRV_SET or SELDSK */
+						DEBUG("%s(E=%02X)\n", msx_dos_version ? "SELDSK" : "DRV_SET", cpu->e);
 						// TODO
 						break;
 					case 0x0F:
-						/* F_OPEN or FOPEN */
+						DEBUG("%s(DE=%04X)\n", msx_dos_version ? "FOPEN" : "F_OPEN", cpu->de);
 						// TODO
 						break;
 					case 0x10:
-						/* F_CLOSE or FCLOSE*/
+						DEBUG("%s(DE=%04X)\n", msx_dos_version ? "FCLOSE" : "F_CLOSE", cpu->de);
 						// TODO
 						break;
 					case 0x11:
-						/* F_SFIRST or SFIRST */
+						DEBUG("%s(DE=%04X)\n", msx_dos_version ? "SFIRST" : "F_SFIRST", cpu->de);
 						// TODO
 						break;
 					case 0x12:
-						/* F_SNEXT or SNEXT */
+						DEBUG("%s()\n", msx_dos_version ? "SNEXT" : "F_SNEXT");
 						// TODO
 						break;
 					case 0x13:
-						/* F_DELETE or FDEL */
+						DEBUG("%s(DE=%04X)\n", msx_dos_version ? "FDEL" : "F_DELETE", cpu->de);
 						// TODO
 						break;
 					case 0x14:
-						/* F_READ or RDSEQ */
+						DEBUG("%s(DE=%04X)\n", msx_dos_version ? "RDSEQ" : "F_READ", cpu->de);
 						// TODO
 						break;
 					case 0x15:
-						/* F_WRITE or WRSEQ */
+						DEBUG("%s(DE=%04X)\n", msx_dos_version ? "WRSEQ" : "F_WRITE", cpu->de);
 						// TODO
 						break;
 					case 0x16:
-						/* F_MAKE or FMAKE */
+						DEBUG("%s(DE=%04X)\n", msx_dos_version ? "FMAKE" : "F_MAKE", cpu->de);
 						// TODO
 						break;
 					case 0x17:
-						/* F_RENAME or FREN */
+						DEBUG("%s(DE=%04X)\n", msx_dos_version ? "FREN" : "F_RENAME", cpu->de);
 						// TODO
 						break;
 					case 0x18:
-						/* DRV_LOGINVEC or LOGIN */
+						DEBUG("%s()\n", msx_dos_version ? "LOGIN" : "DRV_LOGINVEC");
 						// TODO
 						break;
 					case 0x19:
-						/* DRV_GET or CURDRV */
+						DEBUG("%s()\n", msx_dos_version ? "CURDRV" : "DRV_GET");
 						// TODO
 						break;
 					case 0x1A:
-						/* F_DMAOFF or SETDTA */
+						DEBUG("%s(DE=%04X)\n", msx_dos_version ? "SETDTA" : "F_DMAOFF", cpu->de);
 						// TODO
 						break;
 					case 0x1B:
 						if(msx_dos_version != 0)
 						{
-							/* ALLOC */
+							DEBUG("ALLOC(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
 						{
-							/* DRV_ALLOCVEC */
+							DEBUG("DRV_ALLOCVEC()\n");
 							// TODO
 						}
 						break;
 					case 0x1C:
 						if(msx_dos_version != 0)
 						{
-							/* Unused */
+					msx_dos_unused_bdos_call:
+							DEBUG("unused(C=%02X)\n", cpu->c);
 							cpu->hl = 0;
 							cpu->a = cpu->b = 0;
 						}
 						else
 						{
-							/* DRV_SETRO */
+							DEBUG("DRV_SETRO()\n");
 							// TODO
 						}
 						break;
 					case 0x1D:
 						if(msx_dos_version != 0)
 						{
-							/* Unused */
-							cpu->hl = 0;
-							cpu->a = cpu->b = 0;
+							goto msx_dos_unused_bdos_call;
 						}
 						else
 						{
-							/* DRV_ROVEC */
+							DEBUG("DRV_ROVEC()\n");
 							// TODO
 						}
 						break;
 					case 0x1E:
 						if(msx_dos_version != 0)
 						{
-							/* Unused */
-							cpu->hl = 0;
-							cpu->a = cpu->b = 0;
+							goto msx_dos_unused_bdos_call;
 						}
 						else if(cpm_version == X80_CPM_10)
 						{
-							/* Set echo mode */
+							DEBUG("set echo mode(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else if(cpm_version == X80_CPM_14)
 						{
-							/* Set directory buffer */
+							DEBUG("set directory buffer(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else if(cpm_version >= X80_CPM_20)
 						{
-							/* F_ATTRIB */
+							DEBUG("F_ATTRIB(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2113,13 +2154,11 @@ int main(int argc, char * argv[])
 					case 0x1F:
 						if(msx_dos_version != 0)
 						{
-							/* Unused */
-							cpu->hl = 0;
-							cpu->a = cpu->b = 0;
+							goto msx_dos_unused_bdos_call;
 						}
 						else if(cpm_version >= X80_CPM_20)
 						{
-							/* DRV_DPB */
+							DEBUG("DRV_DPB()\n");
 							// TODO
 						}
 						else
@@ -2130,13 +2169,11 @@ int main(int argc, char * argv[])
 					case 0x20:
 						if(msx_dos_version != 0)
 						{
-							/* Unused */
-							cpu->hl = 0;
-							cpu->a = cpu->b = 0;
+							goto msx_dos_unused_bdos_call;
 						}
 						else if(cpm_version >= X80_CPM_20)
 						{
-							/* F_USERNUM */
+							DEBUG("F_USERNUM(E=%02X)\n", cpu->e);
 							if(cpu->e == 0xFF)
 							{
 								cpu->l = cpu->a = x80_readbyte(cpu, zero_page + 0x0004) >> 4;
@@ -2154,7 +2191,7 @@ int main(int argc, char * argv[])
 					case 0x21:
 						if(cpm_version >= X80_CPM_20)
 						{
-							/* F_READRAND or RDRND */
+							DEBUG("%s(DE=%04X)\n", msx_dos_version ? "RDRND" : "F_READRAND", cpu->de);
 							// TODO
 						}
 						else
@@ -2165,7 +2202,7 @@ int main(int argc, char * argv[])
 					case 0x22:
 						if(cpm_version >= X80_CPM_20)
 						{
-							/* F_WRITERAND or WRRND */
+							DEBUG("%s(DE=%04X)\n", msx_dos_version ? "WRRND" : "F_WRITERAND", cpu->de);
 							// TODO
 						}
 						else
@@ -2176,7 +2213,7 @@ int main(int argc, char * argv[])
 					case 0x23:
 						if(cpm_version >= X80_CPM_20)
 						{
-							/* F_SIZE or FSIZE */
+							DEBUG("%s(DE=%04X)\n", msx_dos_version ? "FSIZE" : "F_SIZE", cpu->de);
 							// TODO
 						}
 						else
@@ -2187,7 +2224,7 @@ int main(int argc, char * argv[])
 					case 0x24:
 						if(cpm_version >= X80_CPM_20)
 						{
-							/* F_RANDREC or SETRND */
+							DEBUG("%s(DE=%04X)\n", msx_dos_version ? "SETRND" : "F_RANDREC", cpu->de);
 							// TODO
 						}
 						else
@@ -2198,13 +2235,11 @@ int main(int argc, char * argv[])
 					case 0x25:
 						if(msx_dos_version != 0)
 						{
-							/* Unused */
-							cpu->hl = 0;
-							cpu->a = cpu->b = 0;
+							goto msx_dos_unused_bdos_call;
 						}
 						else if(cpm_version >= X80_CPM_22)
 						{
-							/* DRV_RESET */
+							DEBUG("DRV_RESET(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2215,12 +2250,12 @@ int main(int argc, char * argv[])
 					case 0x26:
 						if(msx_dos_version != 0)
 						{
-							/* WRBLK */
+							DEBUG("WRBLK(DE=%04X,HL=%04X)\n", cpu->de, cpu->hl);
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* DRV_ACCESS */
+							DEBUG("DRV_ACCESS(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2231,12 +2266,12 @@ int main(int argc, char * argv[])
 					case 0x27:
 						if(msx_dos_version != 0)
 						{
-							/* RDBLK */
+							DEBUG("WRBLK(DE=%04X,HL=%04X)\n", cpu->de, cpu->hl);
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* DRV_FREE */
+							DEBUG("DRV_FREE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2247,7 +2282,7 @@ int main(int argc, char * argv[])
 					case 0x28:
 						if(cpm_version >= X80_CPM_22)
 						{
-							/* F_WRITEZF or WRZER */
+							DEBUG("%s(DE=%04X)\n", msx_dos_version ? "WRZER" : "F_WRITEZF", cpu->de);
 							// TODO
 						}
 						else
@@ -2258,19 +2293,19 @@ int main(int argc, char * argv[])
 					case 0x29:
 						if(msx_dos_version != 0)
 						{
-							/* Unused */
-							cpu->hl = 0;
-							cpu->a = cpu->b = 0;
+							goto msx_dos_unused_bdos_call;
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* Test and write record */
-							// TODO
-						}
-						else if(cpm_version >= X80_CPM_3)
-						{
-							/* Test and write record */
-							cpu->a = cpu->l = 0xFF;
+							DEBUG("test and write record(DE=%04X)\n", cpu->de);
+							if(cpm_version >= X80_CPM_3)
+							{
+								cpu->a = cpu->l = 0xFF;
+							}
+							else
+							{
+								// TODO
+							}
 						}
 						else
 						{
@@ -2280,12 +2315,12 @@ int main(int argc, char * argv[])
 					case 0x2A:
 						if(msx_dos_version != 0)
 						{
-							/* GDATE */
+							DEBUG("GDATE()\n");
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* F_LOCK */
+							DEBUG("F_LOCK(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2296,12 +2331,12 @@ int main(int argc, char * argv[])
 					case 0x2B:
 						if(msx_dos_version != 0)
 						{
-							/* SDATE */
+							DEBUG("SDATE(DE=%04X,HL=%04X)\n", cpu->de, cpu->hl);
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* F_UNLOCK */
+							DEBUG("F_UNLOCK(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2312,12 +2347,12 @@ int main(int argc, char * argv[])
 					case 0x2C:
 						if(msx_dos_version != 0)
 						{
-							/* GTIME */
+							DEBUG("GTIME()\n");
 							// TODO
 						}
 						else if(cpm_version >= 0x0030)
 						{
-							/* F_MULTISEC */
+							DEBUG("MULTISEC(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -2328,12 +2363,12 @@ int main(int argc, char * argv[])
 					case 0x2D:
 						if(msx_dos_version != 0)
 						{
-							/* STIME */
+							DEBUG("STIME(DE=%04X,HL=%04X)\n", cpu->de, cpu->hl);
 							// TODO
 						}
 						else if(cpm_version >= X80_CPM_28)
 						{
-							/* F_ERRMODE */
+							DEBUG("F_ERRMODE(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -2344,12 +2379,12 @@ int main(int argc, char * argv[])
 					case 0x2E:
 						if(msx_dos_version != 0)
 						{
-							/* VERIFY */
+							DEBUG("VERIFY(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else if(cpm_version >= 0x0030)
 						{
-							/* DRV_SPACE */
+							DEBUG("DRV_SPACE(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -2360,12 +2395,12 @@ int main(int argc, char * argv[])
 					case 0x2F:
 						if(msx_dos_version != 0)
 						{
-							/* RDABS */
+							DEBUG("RDABS(DE=%04X,HL=%04X)\n", cpu->de, cpu->hl);
 							// TODO
 						}
 						else if(cpm_version >= 0x0030)
 						{
-							/* P_CHAIN */
+							DEBUG("P_CHAIN(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -2376,12 +2411,12 @@ int main(int argc, char * argv[])
 					case 0x30:
 						if(msx_dos_version != 0)
 						{
-							/* WRABS */
+							DEBUG("WRABS(DE=%04X,HL=%04X)\n", cpu->de, cpu->hl);
 							// TODO
 						}
 						else if(cpm_version >= X80_CPM_28)
 						{
-							/* DRV_FLUSH */
+							DEBUG("DRV_FLUSH(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -2392,12 +2427,12 @@ int main(int argc, char * argv[])
 					case 0x31:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* DPARM */
+							DEBUG("DPARM(DE=%04X,L=%02X)\n", cpu->de, cpu->l);
 							// TODO
 						}
 						else if(cpm_version >= X80_CPM_3)
 						{
-							/* Access system control block */
+							DEBUG("access system control block(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2408,13 +2443,11 @@ int main(int argc, char * argv[])
 					case 0x32:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* Unused */
-							cpu->hl = 0;
-							cpu->a = cpu->b = 0;
+							goto msx_dos_unused_bdos_call;
 						}
 						else if(cpm_version >= X80_CPM_3)
 						{
-							/* S_BIOS */
+							DEBUG("S_BIOS(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2430,12 +2463,24 @@ int main(int argc, char * argv[])
 					case 0x38:
 					case 0x39:
 					case 0x3A:
+						if(msx_dos_version >= X80_MSXDOS_2)
+						{
+							goto msx_dos_unused_bdos_call;
+						}
+						else
+						{
+							goto unimplemented_bdos_call;
+						}
+						break;
 					case 0x3B:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* Unused */
-							cpu->hl = 0;
-							cpu->a = cpu->b = 0;
+							goto msx_dos_unused_bdos_call;
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							DEBUG("P_LOAD(DE=%04X)\n", cpu->de);
+							// TODO
 						}
 						else
 						{
@@ -2445,13 +2490,12 @@ int main(int argc, char * argv[])
 					case 0x3C:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* Unused */
-							cpu->hl = 0;
-							cpu->a = cpu->b = 0;
+							goto msx_dos_unused_bdos_call;
 						}
 						else if(cpm_version >= X80_CPM_3)
 						{
-							/* Call to RSX, default behavior */
+							DEBUG("call to RSX(DE=%04X)\n", cpu->de);
+							/* default behavior */
 							cpu->hl = 0x00FF;
 							cpu->a = cpu->l;
 							cpu->b = cpu->h;
@@ -2466,9 +2510,7 @@ int main(int argc, char * argv[])
 					case 0x3F:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* Unused */
-							cpu->hl = 0;
-							cpu->a = cpu->b = 0;
+							goto msx_dos_unused_bdos_call;
 						}
 						else
 						{
@@ -2478,7 +2520,7 @@ int main(int argc, char * argv[])
 					case 0x40:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* FFIRST */
+							DEBUG("FFIRST(DE=%04X,IX=%04X)\n", cpu->de, cpu->ix);
 							// TODO
 						}
 						else
@@ -2489,7 +2531,7 @@ int main(int argc, char * argv[])
 					case 0x41:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* FNEXT */
+							DEBUG("FNEXT(IX=%04X)\n", cpu->ix);
 							// TODO
 						}
 						else
@@ -2500,7 +2542,7 @@ int main(int argc, char * argv[])
 					case 0x42:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* FNEW */
+							DEBUG("FNEW(B=%02X,DE=%04X,HL=%04X,IX=%04X)\n", cpu->b, cpu->de, cpu->hl, cpu->ix);
 							// TODO
 						}
 						else
@@ -2511,7 +2553,7 @@ int main(int argc, char * argv[])
 					case 0x43:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* FOPEN */
+							DEBUG("FOPEN(A=%02X,DE=%04X)\n", cpu->a, cpu->de);
 							// TODO
 						}
 						else
@@ -2522,7 +2564,7 @@ int main(int argc, char * argv[])
 					case 0x44:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* CREATE */
+							DEBUG("CREATE(A=%02X,B=%02X,DE=%04X)\n", cpu->a, cpu->b, cpu->de);
 							// TODO
 						}
 						else
@@ -2533,7 +2575,7 @@ int main(int argc, char * argv[])
 					case 0x45:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* CLOSE */
+							DEBUG("CLOSE(B=%02X)\n", cpu->b);
 							// TODO
 						}
 						else
@@ -2544,7 +2586,7 @@ int main(int argc, char * argv[])
 					case 0x46:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* ENSURE */
+							DEBUG("ENSURE(B=%02X)\n", cpu->b);
 							// TODO
 						}
 						else
@@ -2555,7 +2597,7 @@ int main(int argc, char * argv[])
 					case 0x47:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* DUP */
+							DEBUG("DUP(B=%02X)\n", cpu->b);
 							// TODO
 						}
 						else
@@ -2566,7 +2608,7 @@ int main(int argc, char * argv[])
 					case 0x48:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* READ */
+							DEBUG("READ(B=%02X,DE=%04X,HL=%04X)\n", cpu->b, cpu->de, cpu->hl);
 							// TODO
 						}
 						else
@@ -2577,7 +2619,7 @@ int main(int argc, char * argv[])
 					case 0x49:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* WRITE */
+							DEBUG("WRITE(B=%02X,DE=%04X,HL=%04X)\n", cpu->b, cpu->de, cpu->hl);
 							// TODO
 						}
 						else
@@ -2588,7 +2630,7 @@ int main(int argc, char * argv[])
 					case 0x4A:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* SEEK */
+							DEBUG("SEEK(A=%02X,B=%02X,DE=%04X,HL=%04X)\n", cpu->a, cpu->b, cpu->de, cpu->hl);
 							// TODO
 						}
 						else
@@ -2599,7 +2641,7 @@ int main(int argc, char * argv[])
 					case 0x4B:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* IOCTL */
+							DEBUG("IOCTL(A=%02X,B=%02X,DE=%04X)\n", cpu->a, cpu->b, cpu->de);
 							// TODO
 						}
 						else
@@ -2610,7 +2652,7 @@ int main(int argc, char * argv[])
 					case 0x4C:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* HTEST */
+							DEBUG("HTEST(B=%02X,DE=%04X)\n", cpu->b, cpu->de);
 							// TODO
 						}
 						else
@@ -2621,7 +2663,7 @@ int main(int argc, char * argv[])
 					case 0x4D:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* DELETE */
+							DEBUG("DELETE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2632,7 +2674,7 @@ int main(int argc, char * argv[])
 					case 0x4E:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* RENAME */
+							DEBUG("RENAME(DE=%04X,HL=%04X)\n", cpu->de, cpu->hl);
 							// TODO
 						}
 						else
@@ -2643,7 +2685,7 @@ int main(int argc, char * argv[])
 					case 0x4F:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* MOVE */
+							DEBUG("MOVE(DE=%04X,HL=%04X)\n", cpu->de, cpu->hl);
 							// TODO
 						}
 						else
@@ -2654,7 +2696,7 @@ int main(int argc, char * argv[])
 					case 0x50:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* ATTR */
+							DEBUG("ATTR(A=%02X,DE=%04X,L=%02X)\n", cpu->a, cpu->de, cpu->l);
 							// TODO
 						}
 						else
@@ -2665,7 +2707,7 @@ int main(int argc, char * argv[])
 					case 0x51:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* FTIME */
+							DEBUG("FTIME(A=%02X,DE=%04X,HL=%04X,IX=%04X)\n", cpu->a, cpu->de, cpu->hl, cpu->ix);
 							// TODO
 						}
 						else
@@ -2676,7 +2718,7 @@ int main(int argc, char * argv[])
 					case 0x52:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* HDELETE */
+							DEBUG("HDELETE(B=%02X)\n", cpu->b);
 							// TODO
 						}
 						else
@@ -2687,7 +2729,7 @@ int main(int argc, char * argv[])
 					case 0x53:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* HRENAME */
+							DEBUG("HRENAME(B=%02X,HL=%04X)\n", cpu->b, cpu->hl);
 							// TODO
 						}
 						else
@@ -2698,7 +2740,7 @@ int main(int argc, char * argv[])
 					case 0x54:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* HMOVE */
+							DEBUG("HMOVE(B=%02X,HL=%04X)\n", cpu->b, cpu->hl);
 							// TODO
 						}
 						else
@@ -2709,7 +2751,7 @@ int main(int argc, char * argv[])
 					case 0x55:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* HATTR */
+							DEBUG("HATTR(A=%02X,B=%02X,L=%02X)\n", cpu->a, cpu->b, cpu->l);
 							// TODO
 						}
 						else
@@ -2720,7 +2762,7 @@ int main(int argc, char * argv[])
 					case 0x56:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* HFTIME */
+							DEBUG("HFTIME(A=%02X,B=%02X,HL=%04X,IX=%04X)\n", cpu->a, cpu->b, cpu->hl, cpu->ix);
 							// TODO
 						}
 						else
@@ -2731,7 +2773,7 @@ int main(int argc, char * argv[])
 					case 0x57:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* GETDTA */
+							DEBUG("GETDTA()\n");
 							// TODO
 						}
 						else
@@ -2742,7 +2784,7 @@ int main(int argc, char * argv[])
 					case 0x58:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* GETVFY */
+							DEBUG("GETVFY()\n");
 							// TODO
 						}
 						else
@@ -2753,7 +2795,7 @@ int main(int argc, char * argv[])
 					case 0x59:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* GETCD */
+							DEBUG("GETCD(B=%02X,DE=%04X)\n", cpu->b, cpu->de);
 							// TODO
 						}
 						else
@@ -2764,7 +2806,7 @@ int main(int argc, char * argv[])
 					case 0x5A:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* CHDIR */
+							DEBUG("CHDIR(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2775,7 +2817,7 @@ int main(int argc, char * argv[])
 					case 0x5B:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* PARSE */
+							DEBUG("PARSE(B=%02X,DE=%04X)\n", cpu->b, cpu->de);
 							// TODO
 						}
 						else
@@ -2786,7 +2828,7 @@ int main(int argc, char * argv[])
 					case 0x5C:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* PFILE */
+							DEBUG("PFILE(DE=%04X,HL=%04X)\n", cpu->de, cpu->hl);
 							// TODO
 						}
 						else
@@ -2797,7 +2839,7 @@ int main(int argc, char * argv[])
 					case 0x5D:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* CHKCHR */
+							DEBUG("CHKCHR(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2808,7 +2850,7 @@ int main(int argc, char * argv[])
 					case 0x5E:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* WPATH */
+							DEBUG("WPATH(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2819,7 +2861,7 @@ int main(int argc, char * argv[])
 					case 0x5F:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* FLUSH */
+							DEBUG("FLUSH(B=%02X,D=%02X)\n", cpu->b, cpu->d);
 							// TODO
 						}
 						else
@@ -2830,7 +2872,7 @@ int main(int argc, char * argv[])
 					case 0x60:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* FORK */
+							DEBUG("FORK()\n");
 							// TODO
 						}
 						else
@@ -2841,7 +2883,7 @@ int main(int argc, char * argv[])
 					case 0x61:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* JOIN */
+							DEBUG("JOIN(B=%02X)\n", cpu->b);
 							// TODO
 						}
 						else
@@ -2852,8 +2894,13 @@ int main(int argc, char * argv[])
 					case 0x62:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* TERM */
+							DEBUG("TERM(B=%02X)\n", cpu->b);
 							exit(cpu->b);
+						}
+						else if(cpm_version >= X80_CPM_3)
+						{
+							DEBUG("clean up disk()\n");
+							// TODO
 						}
 						else
 						{
@@ -2863,12 +2910,12 @@ int main(int argc, char * argv[])
 					case 0x63:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* DEFAB */
+							DEBUG("DEFAB(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else if(cpm_version >= X80_CPM_3)
 						{
-							/* F_TRUNCATE */
+							DEBUG("F_TRUNCATE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2879,12 +2926,12 @@ int main(int argc, char * argv[])
 					case 0x64:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* DEFER */
+							DEBUG("DEFER(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* DRV_SETLABEL */
+							DEBUG("DRV_SETLABEL(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2895,12 +2942,12 @@ int main(int argc, char * argv[])
 					case 0x65:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* ERROR */
+							DEBUG("ERROR()\n");
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* DRV_GETLABEL */
+							DEBUG("DRV_GETLABEL(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -2911,12 +2958,12 @@ int main(int argc, char * argv[])
 					case 0x66:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* EXPLAIN */
+							DEBUG("EXPLAIN(B=%02X,DE=%04X)\n", cpu->b, cpu->de);
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* F_TIMEDATE */
+							DEBUG("F_TIMEDATE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2927,12 +2974,12 @@ int main(int argc, char * argv[])
 					case 0x67:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* FORMAT */
+							DEBUG("FORMAT(A=%02X,B=%02X,DE=%04X,HL=%04X)\n", cpu->a, cpu->b, cpu->de, cpu->hl);
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* F_WRITEXFCB */
+							DEBUG("F_WRITEXFCB(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2943,12 +2990,12 @@ int main(int argc, char * argv[])
 					case 0x68:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* RAMD */
+							DEBUG("RAMD(B=%02X)\n", cpu->b);
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* T_SET */
+							DEBUG("T_SET(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2959,12 +3006,12 @@ int main(int argc, char * argv[])
 					case 0x69:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* BUFFER */
+							DEBUG("BUFFER(B=%02X)\n", cpu->b);
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* T_GET */
+							DEBUG("T_GET(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2975,12 +3022,12 @@ int main(int argc, char * argv[])
 					case 0x6A:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* ASSIGN */
+							DEBUG("ASSIGN(B=%02X,D=%02X)\n", cpu->b, cpu->d);
 							// TODO
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* F_PASSWD */
+							DEBUG("F_PASSWD(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -2991,7 +3038,7 @@ int main(int argc, char * argv[])
 					case 0x6B:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* GENV */
+							DEBUG("GENV(B=%02X,DE=%04X,HL=%04X)\n", cpu->b, cpu->de, cpu->hl);
 							char buffer[255];
 							for(uint8_t i = 0; ; i++)
 							{
@@ -3015,7 +3062,7 @@ int main(int argc, char * argv[])
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* S_SERIAL */
+							DEBUG("S_SERIAL(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3028,12 +3075,12 @@ int main(int argc, char * argv[])
 					case 0x6C:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* SENV */
+							DEBUG("SENV(B=%02X,DE=%04X,HL=%04X)\n", cpu->b, cpu->de, cpu->hl);
 							// TODO
 						}
 						else if(cpm_version >= X80_CPM_3)
 						{
-							/* P_CODE */
+							DEBUG("P_CODE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3044,7 +3091,7 @@ int main(int argc, char * argv[])
 					case 0x6D:
 						if(msx_dos_version != 0)
 						{
-							/* FENV */
+							DEBUG("FENV(B=%02X,DE=%04X,HL=%04X)\n", cpu->b, cpu->de, cpu->hl);
 							char * name;
 							if(cpu->de == 0 || cpu->de > msx_dos_environment.item_count)
 							{
@@ -3064,7 +3111,7 @@ int main(int argc, char * argv[])
 						}
 						else if(!(cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_CPM_28)
 						{
-							/* C_MODE */
+							DEBUG("C_MODE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3075,12 +3122,12 @@ int main(int argc, char * argv[])
 					case 0x6E:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* DSKCHK */
+							DEBUG("DSKCHK(A=%02X,B=%02X)\n", cpu->a, cpu->b);
 							// TODO
 						}
 						else if(!(cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_CPM_28)
 						{
-							/* C_DELIMIT */
+							DEBUG("C_DELIMIT(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3091,7 +3138,7 @@ int main(int argc, char * argv[])
 					case 0x6F:
 						if(msx_dos_version != 0)
 						{
-							/* DOSVER */
+							DEBUG("DOSVER()\n");
 							cpu->a = 0;
 							if(msx_dos_version < 0x0200)
 							{
@@ -3105,7 +3152,7 @@ int main(int argc, char * argv[])
 						}
 						else if(!(cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_CPM_28)
 						{
-							/* C_WRITEBLK */
+							DEBUG("C_WRITEBLK(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3116,12 +3163,12 @@ int main(int argc, char * argv[])
 					case 0x70:
 						if(msx_dos_version >= X80_MSXDOS_2)
 						{
-							/* REDIR */
+							DEBUG("REDIR(A=%02X,B=%02X)\n", cpu->a, cpu->b);
 							// TODO
 						}
 						else if(!(cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_CPM_28)
 						{
-							/* L_WRITEBLK */
+							DEBUG("L_WRITEBLK(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3132,7 +3179,7 @@ int main(int argc, char * argv[])
 					case 0x71:
 						if(cpm_version == X80_CPM_28)
 						{
-							/* Direct screen functions */
+							DEBUG("direct screen function(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3143,7 +3190,7 @@ int main(int argc, char * argv[])
 					case 0x7C:
 						if(cpm_version == X80_CPM_28)
 						{
-							/* Byte block copy */
+							DEBUG("byte block copy()\n");
 							// TODO
 						}
 						else
@@ -3154,7 +3201,7 @@ int main(int argc, char * argv[])
 					case 0x7D:
 						if(cpm_version == X80_CPM_28)
 						{
-							/* Byte block alter */
+							DEBUG("byte block alter()\n");
 							// TODO
 						}
 						else
@@ -3165,7 +3212,7 @@ int main(int argc, char * argv[])
 					case 0x80:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* M_ALLOC - Absolute memory request */
+							DEBUG("M_ALLOC absolute(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3176,7 +3223,7 @@ int main(int argc, char * argv[])
 					case 0x81:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* M_ALLOC - Relocatable memory request */
+							DEBUG("M_ALLOC relocatable(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3187,7 +3234,7 @@ int main(int argc, char * argv[])
 					case 0x82:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* M_FREE */
+							DEBUG("M_FREE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3198,7 +3245,7 @@ int main(int argc, char * argv[])
 					case 0x83:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* DEV_POLL */
+							DEBUG("DEV_POLL(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -3209,7 +3256,7 @@ int main(int argc, char * argv[])
 					case 0x84:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* DEV_WAITFLAG */
+							DEBUG("DEV_WAITFLAG(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -3220,7 +3267,7 @@ int main(int argc, char * argv[])
 					case 0x85:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* DEV_SETFLAG */
+							DEBUG("DEV_SETFLAG(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -3231,7 +3278,7 @@ int main(int argc, char * argv[])
 					case 0x86:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* Q_MAKE */
+							DEBUG("Q_MAKE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3242,7 +3289,7 @@ int main(int argc, char * argv[])
 					case 0x87:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* Q_OPEN */
+							DEBUG("Q_OPEN(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3253,7 +3300,7 @@ int main(int argc, char * argv[])
 					case 0x88:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* Q_DELETE */
+							DEBUG("Q_DELETE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3264,7 +3311,7 @@ int main(int argc, char * argv[])
 					case 0x89:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* Q_READ */
+							DEBUG("Q_READ(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3275,7 +3322,7 @@ int main(int argc, char * argv[])
 					case 0x8A:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* Q_CREAD */
+							DEBUG("Q_CREAD(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3286,7 +3333,7 @@ int main(int argc, char * argv[])
 					case 0x8B:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* Q_WRITE */
+							DEBUG("Q_WRITE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3297,7 +3344,7 @@ int main(int argc, char * argv[])
 					case 0x8C:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* Q_CWRITE */
+							DEBUG("Q_CWRITE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3308,7 +3355,7 @@ int main(int argc, char * argv[])
 					case 0x8D:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* P_DELAY */
+							DEBUG("P_DELAY(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3319,7 +3366,7 @@ int main(int argc, char * argv[])
 					case 0x8E:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* P_DISPATCH */
+							DEBUG("P_DISPATCH()\n");
 							// TODO
 						}
 						else
@@ -3330,7 +3377,7 @@ int main(int argc, char * argv[])
 					case 0x8F:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* P_TERM */
+							DEBUG("P_TERM(E=%02X)\n", cpu->e);
 							exit(0);
 						}
 						else
@@ -3341,7 +3388,7 @@ int main(int argc, char * argv[])
 					case 0x90:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* P_CREATE */
+							DEBUG("P_CREATE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3352,7 +3399,7 @@ int main(int argc, char * argv[])
 					case 0x91:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* P_PRIORITY */
+							DEBUG("P_PRIORITY(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -3363,7 +3410,7 @@ int main(int argc, char * argv[])
 					case 0x92:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* C_ATTACH */
+							DEBUG("C_ATTACH()\n");
 							// TODO
 						}
 						else
@@ -3374,7 +3421,7 @@ int main(int argc, char * argv[])
 					case 0x93:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* C_DETACH */
+							DEBUG("C_DETACH()\n");
 							// TODO
 						}
 						else
@@ -3385,7 +3432,7 @@ int main(int argc, char * argv[])
 					case 0x94:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* C_SET */
+							DEBUG("C_SET(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -3396,7 +3443,7 @@ int main(int argc, char * argv[])
 					case 0x95:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* C_ASSIGN */
+							DEBUG("C_ASSIGN(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3407,7 +3454,7 @@ int main(int argc, char * argv[])
 					case 0x96:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* P_CLI */
+							DEBUG("P_CLI(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3418,7 +3465,7 @@ int main(int argc, char * argv[])
 					case 0x97:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* P_RPL */
+							DEBUG("P_RPL(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3429,7 +3476,7 @@ int main(int argc, char * argv[])
 					case 0x98:
 						if((cpm_version_flags & X80_MPM_FLAG) || cpm_version >= X80_CPM_3)
 						{
-							/* F_PARSE */
+							DEBUG("F_PARSE(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3440,7 +3487,7 @@ int main(int argc, char * argv[])
 					case 0x99:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* C_GET */
+							DEBUG("C_GET()\n");
 							// TODO
 						}
 						else
@@ -3451,7 +3498,7 @@ int main(int argc, char * argv[])
 					case 0x9A:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* S_SYSDAT */
+							DEBUG("S_SYSDAT()\n");
 							// TODO
 						}
 						else
@@ -3462,7 +3509,7 @@ int main(int argc, char * argv[])
 					case 0x9B:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
-							/* T_SECONDS */
+							DEBUG("T_SECONDS(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3473,7 +3520,7 @@ int main(int argc, char * argv[])
 					case 0x9C:
 						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
 						{
-							/* P_PDADR */
+							DEBUG("P_PDADR()\n");
 							// TODO
 						}
 						else
@@ -3484,7 +3531,7 @@ int main(int argc, char * argv[])
 					case 0x9D:
 						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
 						{
-							/* P_ABORT */
+							DEBUG("P_ABORT(DE=%04X)\n", cpu->de);
 							// TODO
 						}
 						else
@@ -3495,7 +3542,7 @@ int main(int argc, char * argv[])
 					case 0x9E:
 						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
 						{
-							/* L_ATTACH */
+							DEBUG("L_ATTACH()\n");
 							// TODO
 						}
 						else
@@ -3506,7 +3553,7 @@ int main(int argc, char * argv[])
 					case 0x9F:
 						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
 						{
-							/* L_DETACH */
+							DEBUG("L_DETACH()\n");
 							// TODO
 						}
 						else
@@ -3517,7 +3564,7 @@ int main(int argc, char * argv[])
 					case 0xA0:
 						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
 						{
-							/* L_SET */
+							DEBUG("L_SET(E=%02X)\n", cpu->e);
 							// TODO
 						}
 						else
@@ -3528,7 +3575,7 @@ int main(int argc, char * argv[])
 					case 0xA1:
 						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
 						{
-							/* L_CATTACH */
+							DEBUG("L_CATTACH()\n");
 							// TODO
 						}
 						else
@@ -3539,7 +3586,7 @@ int main(int argc, char * argv[])
 					case 0xA2:
 						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
 						{
-							/* C_CATTACH */
+							DEBUG("C_CATTACH()\n");
 							// TODO
 						}
 						else
@@ -3550,7 +3597,7 @@ int main(int argc, char * argv[])
 					case 0xA3:
 						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
 						{
-							/* S_OSVER */
+							DEBUG("S_OSVER()\n");
 							cpu->a = cpu->l = mpm_version;
 							cpu->b = cpu->h = cpm_version_flags;
 						}
@@ -3562,7 +3609,7 @@ int main(int argc, char * argv[])
 					case 0xA4:
 						if((cpm_version_flags & X80_MPM_FLAG) && cpm_version >= X80_MPM_2)
 						{
-							/* L_GET */
+							DEBUG("L_GET()\n");
 							// TODO
 						}
 						else
@@ -3597,10 +3644,6 @@ int main(int argc, char * argv[])
 			default:
 				if(system_type == X80_SYSTEM_CPM)
 				{
-					if(do_debug)
-					{
-						fprintf(stderr, "BIOS(%d)\n", code - 1);
-					}
 					switch(code)
 					{
 					case 1:
