@@ -1,13 +1,16 @@
 
 LINK=external/link
 
-all: diag.com diagm.prl diag3.com
+all: elf2uzi cpudisc.com diag.com diagm.prl diag3.com
 
 clean:
-	rm -rf *.o *.rsx *.com *.prl
+	rm -rf elf2uzi *.o *.rsx *.com *.prl
 
 distclean: clean
 	rm -rf *~
+
+%: %.c
+	gcc -o $@ $<
 
 diag.com: diag.s
 	z80-coff-as $< -o com.o --defsym FORMAT_COM=1
@@ -28,4 +31,7 @@ diag2.rsx: diag.s
 diag3.com: diag.s diag1.rsx diag2.rsx
 	z80-coff-as diag.s -o cpm3.o --defsym FORMAT_CPM3=1
 	${LINK} -Fcpm3 cpm3.o -o $@ -Srsx=rsx1=diag1.rsx,rsx2=diag2.rsx
+
+cpudisc.com: cpudisc.asm
+	../out/assembler $< -o $@
 

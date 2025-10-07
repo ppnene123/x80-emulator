@@ -8,6 +8,7 @@
 *.prl
 *.com
 !/tools/cpudisc.com
+/tools/elf2uzi
 /test/uzi/*.asm
 /test/uzi/*.bin
 /test/uzi/*.elf
