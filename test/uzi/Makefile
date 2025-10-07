@@ -2,7 +2,7 @@
 all: hello.80.bin
 
 clean:
-	rm -rf *.bin *.elf
+	rm -rf *.bin *.elf *.o *.asm
 
 distclean: clean
 	rm -rf *~
