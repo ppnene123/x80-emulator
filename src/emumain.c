@@ -725,7 +725,7 @@ void kbd_init(void)
 	tcsetattr(0, TCSAFLUSH, &kbd_new);
 }
 
-int readchar(int fd)
+int kbd_readchar(int fd)
 {
 	unsigned char c;
 	struct pollfd fds[1] = { { fd, POLLIN, 0 } };
@@ -734,6 +734,45 @@ int readchar(int fd)
 	if(read(fd, &c, 1) < 1)
 		return -1;
 	return c;
+}
+
+static int bdos_last_char = -1;
+
+int bdos_getchar(void)
+{
+	if(bdos_last_char != -1)
+	{
+		int c = bdos_last_char;
+		bdos_last_char = -1;
+		return c;
+	}
+	else
+	{
+		return kbd_readchar(0);
+	}
+}
+
+int bdos_peekchar(void)
+{
+	if(bdos_last_char == -1)
+	{
+		bdos_last_char = kbd_readchar(0);
+	}
+	return bdos_last_char;
+}
+
+int bdos_waitchar(void)
+{
+	if(bdos_last_char == -1)
+	{
+		return getchar();
+	}
+	else
+	{
+		int c = bdos_last_char;
+		bdos_last_char = -1;
+		return c;
+	}
 }
 
 //// file access
@@ -1874,7 +1913,9 @@ int main(int argc, char * argv[])
 					case 0x01:
 						DEBUG("%s()\n", msx_dos_version ? "CONIN" : "C_READ");
 						{
-							int c = getchar();
+							int c = bdos_waitchar();
+							// TODO: process character
+							putchar(c);
 							cpu->a = c;
 							if(cpm_version >= X80_CPM_20)
 								cpu->l = c;
@@ -1888,7 +1929,8 @@ int main(int argc, char * argv[])
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
 							DEBUG("raw console input()\n");
-							// TODO
+							int c = bdos_waitchar();
+							cpu->a = cpu->l = c;
 						}
 						else
 						{
@@ -1926,25 +1968,28 @@ int main(int argc, char * argv[])
 							case 0xFF:
 								if((cpm_version < X80_MPM_2) && (cpm_version_flags & X80_MPM_FLAG))
 								{
-									// TODO
+									cpu->a = cpu->l = bdos_waitchar();
 								}
 								else
 								{
-									// TODO
+									int c = bdos_peekchar();
+									cpu->a = cpu->l = c == -1 ? 0 : c;
 								}
 								break;
 							case 0xFE:
 								if(cpm_version >= X80_CPM_3)
 								{
-									// TODO
+									cpu->a = cpu->l = bdos_last_char == -1 ? 0 : 0xFF;
 									break;
 								}
+								// fallthrough
 							case 0xFD:
 								if(cpm_version >= X80_CPM_3)
 								{
-									// TODO
+									cpu->a = cpu->l = bdos_waitchar();
 									break;
 								}
+								// fallthrough
 							default:
 								putchar(cpu->e);
 								break;
@@ -1955,7 +2000,7 @@ int main(int argc, char * argv[])
 						if(msx_dos_version != 0)
 						{
 							DEBUG("DIRIN()\n");
-							// TODO
+							cpu->a = cpu->l = bdos_waitchar();
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG))
 						{
@@ -1982,7 +2027,9 @@ int main(int argc, char * argv[])
 						if(msx_dos_version != 0)
 						{
 							DEBUG("INNOE()\n");
-							// TODO
+							int c = bdos_waitchar();
+							// TODO: process character
+							cpu->a = cpu->l = c;
 						}
 						else if((cpm_version_flags & X80_MPM_FLAG))
 						{
@@ -2176,7 +2223,7 @@ int main(int argc, char * argv[])
 							DEBUG("F_USERNUM(E=%02X)\n", cpu->e);
 							if(cpu->e == 0xFF)
 							{
-								cpu->l = cpu->a = x80_readbyte(cpu, zero_page + 0x0004) >> 4;
+								cpu->a = cpu->l = x80_readbyte(cpu, zero_page + 0x0004) >> 4;
 							}
 							else
 							{
