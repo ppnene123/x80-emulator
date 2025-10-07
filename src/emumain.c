@@ -791,6 +791,13 @@ uint16_t fread16le(FILE * input_file)
 	return le16toh(value);
 }
 
+uint32_t fread32le(FILE * input_file)
+{
+	uint32_t value;
+	fread(&value, 4, 1, input_file);
+	return le32toh(value);
+}
+
 enum
 {
 	X80_SYSTEM_NONE,
@@ -1053,6 +1060,121 @@ address_t load_cpm_file(x80_state_t * cpu, const char * filename, address_t load
 	}
 }
 
+void load_uzi_bin_file(x80_state_t * cpu, FILE * input_file)
+{
+	address_t address = 0x0100;
+	fseek(input_file, 0L, SEEK_SET);
+	while(true)
+	{
+		int byte = fgetc(input_file);
+		if(byte == -1)
+			break;
+		x80_writebyte(cpu, address++, byte);
+	}
+	cpu->pc = 0x0100;
+	cpu->sp = 0xFE00;
+}
+
+enum
+{
+	EV_CURRENT = 1,
+	ELFCLASS32 = 1,
+	ELFDATA2LSB = 1,
+	EM_Z80 = 220,
+	PT_LOAD = 1,
+};
+
+void load_elf_file(x80_state_t * cpu, FILE * input_file)
+{
+	fseek(input_file, 4, SEEK_SET);
+
+	if(fgetc(input_file) != ELFCLASS32)
+	{
+		fprintf(stderr, "Invalid ELF class\n");
+		exit(1);
+	}
+
+	if(fgetc(input_file) != ELFDATA2LSB)
+	{
+		fprintf(stderr, "Invalid ELF data format\n");
+		exit(1);
+	}
+
+	if(fgetc(input_file) != EV_CURRENT)
+	{
+		fprintf(stderr, "Invalid ELF header version\n");
+		exit(1);
+	}
+
+	fseek(input_file, 0x10L, SEEK_SET);
+
+	uint16_t type = fread16le(input_file);
+
+	if(type != 2)
+	{
+		fprintf(stderr, "Not executable\n");
+		exit(1);
+	}
+
+	if(fread16le(input_file) != EM_Z80)
+	{
+		fprintf(stderr, "Invalid machine type\n");
+		exit(1);
+	}
+
+	if(fread32le(input_file) != EV_CURRENT)
+	{
+		fprintf(stderr, "Invalid object version\n");
+		exit(1);
+	}
+
+	cpu->pc = fread32le(input_file);
+
+	uint32_t phoff = fread32le(input_file);
+	uint32_t shoff = fread32le(input_file);
+	(void) shoff;
+
+	uint32_t flags = fread32le(input_file);
+	(void) flags;
+
+	fseek(input_file, 2L, SEEK_CUR);
+
+	uint16_t phentsize = fread16le(input_file);
+	uint16_t phnum = fread16le(input_file);
+	uint16_t shentsize = fread16le(input_file);
+	(void) shentsize;
+	uint16_t shnum = fread16le(input_file);
+	(void) shnum;
+
+	for(uint16_t i = 0; i < phnum; i++)
+	{
+		fseek(input_file, phoff + i * phentsize, SEEK_SET);
+		uint32_t type = fread32le(input_file);
+		if(type == PT_LOAD)
+		{
+			uint32_t offset = fread32le(input_file);
+			uint32_t v_address = fread32le(input_file);
+
+			fseek(input_file, 4, SEEK_CUR); // skip p_address
+
+			uint32_t filesize = fread32le(input_file);
+
+			fseek(input_file, offset, SEEK_SET);
+
+			for(uint32_t offset = 0; offset < filesize; offset++)
+			{
+				uint32_t address = v_address + offset;
+
+				char c = fgetc(input_file);
+
+				x80_writebyte(cpu, address, c);
+			}
+		}
+	}
+
+	cpu->sp = 0;
+}
+
 address_t load_uzi_file(x80_state_t * cpu, const char * filename, address_t load_address)
 {
 	FILE * input_file;
@@ -1067,31 +1189,24 @@ address_t load_uzi_file(x80_state_t * cpu, const char * filename, address_t load
 	if(load_address != 0x100)
 		fprintf(stderr, "Warning: load address 0x%X specified, ignored\n", load_address);
 
-	int byte = fgetc(input_file);
-	if(byte != 0xC3)
+	uint8_t signature[4];
+	size_t bytes = fread(signature, 1, 4, input_file);
+	if(bytes >= 4 && memcmp(signature, "\x7F" "ELF", 4) == 0)
+	{
+		load_elf_file(cpu, input_file);
+	}
+	else if(bytes >= 1 && signature[0] == 0xC3)
+	{
+		load_uzi_bin_file(cpu, input_file);
+	}
+	else
 	{
 		fprintf(stderr, "Invalid binary\n");
 		exit(1);
 	}
 
-	address_t address = 0x0100;
-	fseek(input_file, 0L, SEEK_SET);
-	while(true)
-	{
-		int byte = fgetc(input_file);
-		if(byte == -1)
-			break;
-		x80_writebyte(cpu, address++, byte);
-	}
-
-	address_t sp = 0xFE00;
-
-	sp -= 2;
-	cpu->sp = sp;
-	x80_writeword(cpu, sp, 2, 0);
-	cpu->pc = 0x0100;
-
 	fclose(input_file);
+
 	return 0x0000;
 }
 
@@ -1612,7 +1727,7 @@ static inline char * msx_dos_environment_get(const char * name)
 	return "";
 }
 
-int main(int argc, char * argv[])
+int main(int argc, char * argv[], char * envp[])
 {
 	int argi;
 	bool do_debug = false;
@@ -1929,6 +2044,75 @@ int main(int argc, char * argv[])
 		x80_writeword(cpu, 0x0030,           2, 0x6464); /* special instruction */
 		x80_writebyte(cpu, 0x0032,              0x80); /* UZI emulation */
 		x80_writebyte(cpu, 0x0033,              0xC9); /* ret */
+
+		int prg_argc = argc - argi;
+		char ** prg_argv = argv + argi;
+
+		size_t envp_count;
+		size_t envp_content_size = 0;
+		for(envp_count = 0; envp[envp_count] != NULL; envp_count++)
+		{
+			envp_content_size += strlen(envp[envp_count]) + 1;
+		}
+
+		size_t argv_content_size = 0;
+		for(int i = 0; i < prg_argc; i++)
+		{
+			argv_content_size += strlen(prg_argv[i]) + 1;
+		}
+
+		address_t string_offset;
+		address_t argc_address;
+		address_t argv_contents;
+		address_t envp_contents;
+
+		// stack layout:
+		// argv argc envp[0] ... envp[envp_count - 1] argv[0] ... argv[argc - 1] NULL *argv[0] ... *envp[0]
+
+		address_t stack = cpu->sp;
+
+		stack -= envp_content_size + argv_content_size;
+		string_offset = stack;
+		stack -= 2 * (4 + prg_argc + envp_count);
+		stack &= 0xFFFE;
+
+		argc_address = stack + 2;
+		envp_contents = stack + 4;
+		argv_contents = envp_contents + envp_count * 2 + 2;
+
+		cpu->sp = stack;
+
+		// UZI also pushes argv on the stack
+		x80_writeword(cpu, stack, 2, argv_contents);
+
+		x80_writeword(cpu, argc_address, 2, prg_argc);
+
+		for(int i = 0; i < prg_argc; i++)
+		{
+			x80_writeword(cpu, argv_contents + i * 2, 2, string_offset);
+
+			size_t j = 0;
+			do
+			{
+				x80_writebyte(cpu, string_offset + j, prg_argv[i][j]);
+			} while(prg_argv[i][j++] != '\0');
+
+			string_offset += j;
+		}
+
+		for(size_t i = 0; i < envp_count; i++)
+		{
+			x80_writeword(cpu, envp_contents + i * 2, 2, string_offset);
+
+			size_t j = 0;
+			do
+			{
+				x80_writebyte(cpu, string_offset + j, envp[i][j]);
+			} while(envp[i][j++] != '\0');
+			string_offset += j;
+		}
+
+		x80_writeword(cpu, envp_contents + envp_count * 2, 2, 0);
 	}
 
 	while(true)

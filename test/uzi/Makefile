@@ -1,5 +1,5 @@
 
-all: hello.bin putdec.bin
+all: hello.bin putdec.bin env.bin
 
 clean:
 	rm -rf *.bin *.elf *.o *.asm
