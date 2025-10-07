@@ -140,26 +140,76 @@ struct x80_state_t
 	// most common registers
 	union
 	{
-		uint16_t af;
+		// pack the Datapoint 5500 XA and 8080 PSW registers into a 3-byte register X:A:F
+		uint32_t xaf;
 		struct
 		{
 #if BYTE_ORDER == LITTLE_ENDIAN
-			uint8_t f, a;
+			uint16_t af;
+			uint16_t __xafu;
 #elif BYTE_ORDER == BIG_ENDIAN
-			uint8_t a, f;
+			uint16_t __xafu;
+			uint16_t af;
+#endif
+		};
+		struct
+		{
+#if BYTE_ORDER == LITTLE_ENDIAN
+			uint8_t f, a, x;
+			uint8_t xafu;
+#elif BYTE_ORDER == BIG_ENDIAN
+			uint8_t xafu;
+			uint8_t x, a, f;
+#endif
+		};
+		struct
+		{
+#if BYTE_ORDER == LITTLE_ENDIAN
+			uint32_t __f : 8;
+			uint32_t xa : 16;
+			uint32_t __xafh : 8;
+#elif BYTE_ORDER == BIG_ENDIAN
+			uint32_t __xafh : 8;
+			uint32_t xa : 16;
+			uint32_t __f : 8;
 #endif
 		};
 	};
 
 	union
 	{
-		uint16_t af2;
+		// pack the Datapoint 5500 XA and 8080 PSW registers into a 3-byte register X:A:F
+		uint32_t xaf2;
 		struct
 		{
 #if BYTE_ORDER == LITTLE_ENDIAN
-			uint8_t f2, a2;
+			uint16_t af2;
+			uint16_t __xafu2;
 #elif BYTE_ORDER == BIG_ENDIAN
-			uint8_t a2, f2;
+			uint16_t __xafu2;
+			uint16_t af2;
+#endif
+		};
+		struct
+		{
+#if BYTE_ORDER == LITTLE_ENDIAN
+			uint8_t f2, a2, x2;
+			uint8_t xafu2;
+#elif BYTE_ORDER == BIG_ENDIAN
+			uint8_t xafu2;
+			uint8_t x2, a2, f2;
+#endif
+		};
+		struct
+		{
+#if BYTE_ORDER == LITTLE_ENDIAN
+			uint32_t __f2 : 8;
+			uint32_t xa2 : 16;
+			uint32_t __xafh2 : 8;
+#elif BYTE_ORDER == BIG_ENDIAN
+			uint32_t __xafh2 : 8;
+			uint32_t xa2 : 16;
+			uint32_t __f2 : 8;
 #endif
 		};
 	};
@@ -228,8 +278,6 @@ struct x80_state_t
 			uint8_t stack[16];
 			// DP2200 Version II and later
 			uint8_t ie:1;
-			// DP5500 and later (duplicates the A register)
-			uint16_t xa, xa2;
 		} dp;
 		// structure used by Intel 8080, VM1 and SM83
 		struct
