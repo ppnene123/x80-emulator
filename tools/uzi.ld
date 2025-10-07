@@ -4,6 +4,7 @@ SECTIONS
 	.text 0x103 :
 	{
 		*(.text)
+		*(_CODE)
 	}
 
 	.rodata :
