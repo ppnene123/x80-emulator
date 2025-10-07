@@ -2,3 +2,8 @@
 /out
 /src/cpu/__pycache__
 *~
+*.o
+*.rsx
+*.prl
+*.com
+!tools/cpudisc.com
