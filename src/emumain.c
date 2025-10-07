@@ -4327,6 +4327,26 @@ int main(int argc, char * argv[], char * envp[])
 							// TODO
 						}
 						break;
+					case 0x2B:
+						// new since UZI280
+						{
+							uint16_t filename = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t times = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("utime(%04X,%04X)\n", filename, times);
+							// TODO
+						}
+						break;
+					case 0x2C:
+						// new since UZI180
+						DEBUG("geteuid()\n");
+						// TODO
+						break;
+					case 0x2D:
+						// new since UZI180
+						DEBUG("getegid()\n");
+						// TODO
+						break;
 					default:
 						fprintf(stderr, "Unimplemented UZI system call %04X\n", syscallnum);
 						exit(0);
