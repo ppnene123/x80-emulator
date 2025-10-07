@@ -1775,6 +1775,7 @@ int main(int argc, char * argv[])
 		zero_page = load_cpm_file(cpu, argv[argi], load_address);
 	}
 
+	address_t ccp_start = cpu->sp + 2; // TODO
 	if(system_type == X80_SYSTEM_CPM)
 	{
 		if(emulator_state == STATE_RUNNING)
@@ -1794,7 +1795,16 @@ int main(int argc, char * argv[])
 		x80_writebyte(cpu, 0xFE09,              0xC9); /* ret */
 
 		// BIOS entry points
-		for(int i = 0; i < 16; i++)
+		int bios_table_count;
+
+		if(cpm_version < X80_CPM_20)
+			bios_table_count = 15;
+		else if(cpm_version < X80_CPM_3)
+			bios_table_count = 17;
+		else
+			bios_table_count = 33;
+
+		for(int i = 0; i < bios_table_count; i++)
 		{
 			// jump table entry
 			x80_writebyte(cpu, 0xFF00 + 3 * i,        0xC3); /* jmp */
@@ -1911,6 +1921,7 @@ int main(int argc, char * argv[])
 						exit(0);
 						break;
 					case 0x01:
+					bdos_read_console:
 						DEBUG("%s()\n", msx_dos_version ? "CONIN" : "C_READ");
 						{
 							int c = bdos_waitchar();
@@ -1922,12 +1933,17 @@ int main(int argc, char * argv[])
 						}
 						break;
 					case 0x02:
+					bdos_write_console:
 						DEBUG("%s(E=%02X)\n", msx_dos_version ? "CONOUT" : "C_WRITE", cpu->e);
 						putchar(cpu->e);
 						break;
 					case 0x03:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
+							if(cpm_version < X80_MPM_2)
+							{
+								goto bdos_read_console;
+							}
 							DEBUG("raw console input()\n");
 							int c = bdos_waitchar();
 							cpu->a = cpu->l = c;
@@ -1941,8 +1957,12 @@ int main(int argc, char * argv[])
 					case 0x04:
 						if((cpm_version_flags & X80_MPM_FLAG))
 						{
+							if(cpm_version < X80_MPM_2)
+							{
+								goto bdos_write_console;
+							}
 							DEBUG("raw console output(E=%02X)\n", cpu->e);
-							// TODO
+							putchar(cpu->e); // TODO
 						}
 						else
 						{
@@ -1958,7 +1978,8 @@ int main(int argc, char * argv[])
 						if(cpm_version < X80_CPM_20)
 						{
 							DEBUG("raw memory size()\n");
-							// TODO
+							cpu->a = ccp_start;
+							cpu->b = ccp_start >> 8;
 						}
 						else
 						{
@@ -3694,14 +3715,217 @@ int main(int argc, char * argv[])
 					switch(code)
 					{
 					case 1:
-						/* BOOT */
+						DEBUG("BOOT()\n");
 						exit(0);
 						break;
 					case 2:
-						/* WBOOT */
+						DEBUG("WBOOT()\n");
 						exit(0);
 						break;
+					case 3:
+						DEBUG("CONST()\n");
+						{
+							int c = bdos_peekchar();
+							cpu->a = c == -1 ? 0xFF : c;
+						}
+						break;
+					case 4:
+						DEBUG("CONIN()\n");
+						cpu->a = bdos_waitchar();
+						break;
+					case 5:
+						DEBUG("CONOUT(C=%02X)\n", cpu->c);
+						putchar(cpu->c);
+						break;
+					case 6:
+						DEBUG("LIST(C=%02X)\n", cpu->c);
+						// TODO
+						break;
+					case 7:
+						DEBUG("%s(C=%02X)\n", cpm_version < X80_CPM_3 ? "PUNCH" : "AUXOUT", cpu->c);
+						// TODO
+						break;
+					case 8:
+						DEBUG("%s()\n", cpm_version < X80_CPM_3 ? "READER" : "AUXIN");
+						// TODO
+						break;
+					case 9:
+						if(msx_dos_version != 0)
+							break;
+						DEBUG("HOME()\n");
+						// TODO
+						break;
+					case 10:
+						if(msx_dos_version != 0)
+							break;
+						DEBUG("SELDSK(C=%02X,E=%02X)\n", cpu->c, cpu->e);
+						// TODO
+						break;
+					case 11:
+						{
+							if(msx_dos_version != 0)
+								break;
+
+							uint16_t param;
+							if(cpm_version < X80_CPM_20)
+							{
+								DEBUG("SETTRK(C=%02X)\n", cpu->c);
+								param = cpu->c;
+							}
+							else
+							{
+								DEBUG("SETTRK(BC=%04X)\n", cpu->bc);
+								param = cpu->bc;
+							}
+							// TODO
+							(void) param;
+						}
+						break;
+					case 12:
+						{
+							if(msx_dos_version != 0)
+								break;
+
+							uint16_t param;
+							if(cpm_version < X80_CPM_20)
+							{
+								DEBUG("SETSEC(C=%02X)\n", cpu->c);
+								param = cpu->c;
+							}
+							else
+							{
+								DEBUG("SETSEC(BC=%04X)\n", cpu->bc);
+								param = cpu->bc;
+							}
+							// TODO
+							(void) param;
+						}
+						break;
+					case 13:
+						if(msx_dos_version != 0)
+							break;
+						DEBUG("SETDMA(BC=%04X)\n", cpu->bc);
+						// TODO
+						break;
+					case 14:
+						if(msx_dos_version != 0)
+							break;
+						DEBUG("READ()\n");
+						// TODO
+						break;
+					case 15:
+						if(msx_dos_version != 0)
+							break;
+						DEBUG("WRITE(C=%02X)\n", cpu->c);
+						// TODO
+						break;
+					case 16:
+						if(cpm_version < X80_CPM_20)
+							goto unimplemented_bios_call;
+						DEBUG("LISTST()\n");
+						// TODO
+						break;
+					case 17:
+						if(cpm_version < X80_CPM_20)
+							goto unimplemented_bios_call;
+						if(msx_dos_version != 0)
+							break;
+						DEBUG("SECTRAN(BC=%04X,DE=%04X)\n", cpu->bc, cpu->de);
+						// TODO
+						break;
+					case 18:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("CONOST()\n");
+						// TODO
+						break;
+					case 19:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("AUXIST()\n");
+						// TODO
+						break;
+					case 20:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("AUXOST()\n");
+						// TODO
+						break;
+					case 21:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("DEVTBL()\n");
+						// TODO
+						break;
+					case 22:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("DEVINI(C=%02X)\n", cpu->c);
+						// TODO
+						break;
+					case 23:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("DRVTBL()\n");
+						// TODO
+						break;
+					case 24:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("MULTIO(C=%02X)\n", cpu->c);
+						// TODO
+						break;
+					case 25:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("FLUSH()\n");
+						// TODO
+						break;
+					case 26:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("MOVE(BC=%04X,DE=%04X,HL=%04X)\n", cpu->bc, cpu->de, cpu->hl);
+						// TODO
+						break;
+					case 27:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("TIME(C=%02X)\n", cpu->c);
+						// TODO
+						break;
+					case 28:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("SELMEM(A=%02X)\n", cpu->a);
+						// TODO
+						break;
+					case 29:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("SETBNK(A=%02X)\n", cpu->a);
+						// TODO
+						break;
+					case 30:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("XMOVE(B=%02X,C=%02X)\n", cpu->b, cpu->c);
+						// TODO
+						break;
+					case 31:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("USERF()\n");
+						// TODO
+						break;
+					case 32:
+					case 33:
+						if(cpm_version < X80_CPM_3)
+							goto unimplemented_bios_call;
+						DEBUG("RESERV%d()\n", code - 31);
+						cpu->pc = 0;
+						break;
 					default:
+					unimplemented_bios_call:
 						fprintf(stderr, "Unimplemented (BIOS %d)\n", code - 1);
 						exit(1);
 					}
