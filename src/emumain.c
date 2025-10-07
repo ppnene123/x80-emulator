@@ -3967,13 +3967,93 @@ int main(int argc, char * argv[], char * envp[])
 					switch(syscallnum)
 					{
 					case 0x00:
-						exit(x80_readword(cpu, cpu->sp + 6, 2));
+						{
+							uint16_t status = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("exit(%04X)\n", status);
+							exit(status);
+						}
+						break;
+					case 0x01:
+						{
+							uint16_t pathname = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t flags = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("open(%04X,%04X)\n", pathname, flags);
+							// TODO
+						}
+						break;
+					case 0x02:
+						{
+							uint16_t fd = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("close(%04X)\n", fd);
+							// TODO
+						}
+						break;
+					case 0x03:
+						{
+							uint16_t pathname = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t mode = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("creat(%04X,%04X)\n", pathname, mode);
+							// TODO
+						}
+						break;
+					case 0x04:
+						{
+							uint16_t pathname = x80_readword(cpu, cpu->sp + 10, 2);
+							uint16_t mode = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t dev = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("mknod(%04X,%04X,%04X)\n", pathname, mode, dev);
+							// TODO
+						}
+						break;
+					case 0x05:
+						{
+							uint16_t oldpath = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t newpath = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("link(%04X,%04X)\n", oldpath, newpath);
+							// TODO
+						}
+						break;
+					case 0x06:
+						{
+							uint16_t pathname = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("unlink(%04X)\n", pathname);
+							// TODO
+						}
+						break;
+					case 0x07:
+						{
+							uint16_t fd = x80_readword(cpu, cpu->sp + 10, 2);
+							uint16_t buf = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t count = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("read(%04X,%04X,%04X)\n", fd, buf, count);
+
+							char * buffer = malloc(count);
+							cpu->hl = read(fd, buffer, count);
+							if((int16_t)cpu->hl >= 0)
+							{
+								for(uint16_t offset = 0; offset < count && offset < cpu->hl; offset++)
+								{
+									buffer[offset] = x80_readbyte(cpu, buf + offset);
+								}
+							}
+							free(buffer);
+						}
 						break;
 					case 0x08:
 						{
 							uint16_t fd = x80_readword(cpu, cpu->sp + 10, 2);
 							uint16_t buf = x80_readword(cpu, cpu->sp + 8, 2);
 							uint16_t count = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("write(%04X,%04X,%04X)\n", fd, buf, count);
 
 							char * buffer = malloc(count);
 							for(uint16_t offset = 0; offset < count; offset++)
@@ -3982,6 +4062,269 @@ int main(int argc, char * argv[], char * envp[])
 							}
 							cpu->hl = write(fd, buffer, count);
 							free(buffer);
+						}
+						break;
+					case 0x09:
+						{
+							uint16_t fd = x80_readword(cpu, cpu->sp + 10, 2);
+							uint16_t offset = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t whence = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("seek(%04X,%04X,%04X)\n", fd, offset, whence);
+							// TODO
+						}
+						break;
+					case 0x0A:
+						{
+							uint16_t path = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("chdir(%04X)\n", path);
+							// TODO
+						}
+						break;
+					case 0x0B:
+						DEBUG("sync()\n");
+						// TODO
+						break;
+					case 0x0C:
+						{
+							uint16_t pathname = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t mode = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("access(%04X,%04X)\n", pathname, mode);
+							// TODO
+						}
+						break;
+					case 0x0D:
+						{
+							uint16_t pathname = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t mode = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("chmod(%04X,%04X)\n", pathname, mode);
+							// TODO
+						}
+						break;
+					case 0x0E:
+						{
+							uint16_t pathname = x80_readword(cpu, cpu->sp + 10, 2);
+							uint16_t owner = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t group = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("chown(%04X,%04X,%04X)\n", pathname, owner, group);
+							// TODO
+						}
+						break;
+					case 0x0F:
+						{
+							uint16_t pathname = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t statbuf = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("stat(%04X,%04X)\n", pathname, statbuf);
+							// TODO
+						}
+						break;
+					case 0x10:
+						{
+							uint16_t fd = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t statbuf = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("fstat(%04X,%04X)\n", fd, statbuf);
+							// TODO
+						}
+						break;
+					case 0x11:
+						{
+							uint16_t oldfd = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("dup(%04X)\n", oldfd);
+							// TODO
+						}
+						break;
+					case 0x12:
+						DEBUG("getpid()");
+						// TODO
+						break;
+					case 0x13:
+						DEBUG("getppid()");
+						// TODO
+						break;
+					case 0x14:
+						DEBUG("getuid()");
+						// TODO
+						break;
+					case 0x15:
+						{
+							uint16_t mask = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("umask(%04X)\n", mask);
+							// TODO
+						}
+						break;
+					case 0x16:
+						{
+							uint16_t dev = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t buf = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("getfsys(%04X,%04X)\n", dev, buf);
+							// TODO
+						}
+						break;
+					case 0x17:
+						{
+							uint16_t pathname = x80_readword(cpu, cpu->sp + 10, 2);
+							uint16_t argv = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t envp = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("execve(%04X,%04X,%04X)\n", pathname, argv, envp);
+							// TODO
+						}
+						break;
+					case 0x18:
+						{
+							uint16_t wstatus = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("wait(%04X)\n", wstatus);
+							// TODO
+						}
+						break;
+					case 0x19:
+						{
+							uint16_t uid = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("setuid(%04X)\n", uid);
+							// TODO
+						}
+						break;
+					case 0x1A:
+						{
+							uint16_t gid = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("setgid(%04X)\n", gid);
+							// TODO
+						}
+						break;
+					case 0x1B:
+						{
+							uint16_t tloc = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("time(%04X)\n", tloc);
+							// TODO
+						}
+						break;
+					case 0x1C:
+						{
+							uint16_t tvec = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("stime(%04X)\n", tvec);
+							// TODO
+						}
+						// TODO
+						break;
+					case 0x1D:
+						{
+							uint16_t fd = x80_readword(cpu, cpu->sp + 10, 2);
+							uint16_t request = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t data = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("ioctl(%04X,%04X,%04X)\n", fd, request, data);
+							// TODO
+						}
+						break;
+					case 0x1E:
+						{
+							uint16_t addr = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("brk(%04X)\n", addr);
+							// TODO
+						}
+						break;
+					case 0x1F:
+						{
+							uint16_t increment = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("sbrk(%04X)\n", increment);
+							// TODO
+						}
+						break;
+					case 0x20:
+						DEBUG("fork()\n");
+						// TODO
+						break;
+					case 0x21:
+						{
+							uint16_t spec = x80_readword(cpu, cpu->sp + 10, 2);
+							uint16_t dir = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t rwflags = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("mount(%04X,%04X,%04X)\n", spec, dir, rwflags);
+							// TODO
+						}
+						break;
+					case 0x22:
+						{
+							uint16_t spec = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("umount(%04X)\n", spec);
+							// TODO
+						}
+						break;
+					case 0x23:
+						{
+							uint16_t signum = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t handler = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("signal(%04X,%04X)\n", signum, handler);
+							// TODO
+						}
+						break;
+					case 0x24:
+						{
+							uint16_t oldfd = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t newfd = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("dup2(%04X,%04X)\n", oldfd, newfd);
+							// TODO
+						}
+						break;
+					case 0x25:
+						DEBUG("pause()\n");
+						// TODO
+						break;
+					case 0x26:
+						{
+							uint16_t seconds = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("alarm(%04X)\n", seconds);
+							// TODO
+						}
+						break;
+					case 0x27:
+						{
+							uint16_t pid = x80_readword(cpu, cpu->sp + 8, 2);
+							uint16_t sig = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("kill(%04X,%04X)\n", pid, sig);
+							// TODO
+						}
+						break;
+					case 0x28:
+						{
+							uint16_t pipefd = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("pipe(%04X)\n", pipefd);
+							// TODO
+						}
+						break;
+					case 0x29:
+						DEBUG("getgid()");
+						// TODO
+						break;
+					case 0x2A:
+						{
+							uint16_t buf = x80_readword(cpu, cpu->sp + 6, 2);
+
+							DEBUG("times(%04X)\n", buf);
+							// TODO
 						}
 						break;
 					default:
