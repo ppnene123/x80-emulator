@@ -930,7 +930,7 @@ INLINE void postrotateaccright(x80_state_t * cpu, uint8_t a, uint8_t b)
 
 INLINE void postrotateacc(x80_state_t * cpu, uint8_t a)
 {
-	cpu->af = (cpu->af & ~(F_BITS_CLR | F_C)) | (a & AF_COPY) | AF_ONES;
+	cpu->af = (cpu->af & ~(F_BITS_CLR | AF_COPY | F_C)) | (a & AF_COPY) | AF_ONES;
 }
 
 #define postrotateaccleft(a, b, c) postrotateacc(a, c)
@@ -1387,7 +1387,7 @@ INLINE void testiostring(x80_state_t * cpu, address_t a, uint8_t d)
 /* based on z80 undocumented flags */
 INLINE void testldair(x80_state_t * cpu, uint8_t a)
 {
-	cpu->af = (cpu->af & ~F_C) | (a & (AF_COPY | F_S)) | AF_ONES;
+	cpu->af = (cpu->af & (~0xFF | F_C)) | (a & (AF_COPY | F_S)) | AF_ONES;
 	if(a == 0)
 	{
 		cpu->af |= F_Z;
